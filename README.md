@@ -10,6 +10,33 @@ The upstream project remains Proton Authenticator by Proton AG. This fork keeps
 the upstream GPLv3 license and copyright notices while adding security-focused
 changes under the `Proton Authenticator +` app label.
 
+## Package and signing
+
+This fork uses its own Android application id base:
+
+```text
+com.swordintel.protonauthplus
+```
+
+The F-Droid flavored release APK builds as:
+
+```text
+com.swordintel.protonauthplus.fdroid
+```
+
+Release signing is configured through environment variables or an ignored local
+`private.properties` file:
+
+```text
+PROTON_AUTH_PLUS_STORE_FILE=/path/to/proton-auth-plus-release.jks
+PROTON_AUTH_PLUS_STORE_PASSWORD=...
+PROTON_AUTH_PLUS_KEY_ALIAS=proton-auth-plus
+PROTON_AUTH_PLUS_KEY_PASSWORD=...
+```
+
+The release key must be backed up securely. Android updates require every future
+APK for the same package id to be signed with the same key.
+
 ## Hardened fork upgrades
 
 This fork is aimed at reducing phone-resident TOTP seed exposure for high-risk

@@ -19,6 +19,8 @@
 import com.android.build.api.dsl.VariantDimension
 import configuration.extensions.protonEnvironment
 import configuration.util.toBuildConfigValue
+import java.util.Properties
+import org.gradle.api.GradleException
 import proton.android.authenticator.platform.buildlogic.domain.platform.configuration.PlatformAndroidConfig
 
 plugins {
@@ -26,6 +28,36 @@ plugins {
 }
 
 val sentryDSN: String? = System.getenv("SENTRY_DSN")
+val privateProperties = Properties().apply {
+    val privatePropertiesFile = rootProject.file("private.properties")
+    if (privatePropertiesFile.isFile) {
+        privatePropertiesFile.inputStream().use(::load)
+    }
+}
+
+fun signingProperty(name: String): String? =
+    System.getenv(name) ?: privateProperties.getProperty(name)
+
+val plusReleaseStoreFile = signingProperty("PROTON_AUTH_PLUS_STORE_FILE")
+val plusReleaseStorePassword = signingProperty("PROTON_AUTH_PLUS_STORE_PASSWORD")
+val plusReleaseKeyAlias = signingProperty("PROTON_AUTH_PLUS_KEY_ALIAS")
+val plusReleaseKeyPassword = signingProperty("PROTON_AUTH_PLUS_KEY_PASSWORD")
+val hasPlusReleaseSigning = listOf(
+    plusReleaseStoreFile,
+    plusReleaseStorePassword,
+    plusReleaseKeyAlias,
+    plusReleaseKeyPassword
+).all { value -> !value.isNullOrBlank() }
+val isReleaseTask = gradle.startParameter.taskNames.any { taskName ->
+    taskName.contains("Release")
+}
+
+if (isReleaseTask && !hasPlusReleaseSigning) {
+    throw GradleException(
+        "Release signing is required. Set PROTON_AUTH_PLUS_* environment variables " +
+            "or create an ignored private.properties file."
+    )
+}
 
 fun VariantDimension.setAssetLinksResValue(host: String) {
     resValue(
@@ -45,6 +77,17 @@ android {
         setAssetLinksResValue("proton.me")
     }
 
+    signingConfigs {
+        if (hasPlusReleaseSigning) {
+            create("plusRelease") {
+                storeFile = file(checkNotNull(plusReleaseStoreFile))
+                storePassword = plusReleaseStorePassword
+                keyAlias = plusReleaseKeyAlias
+                keyPassword = plusReleaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -54,7 +97,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasPlusReleaseSigning) {
+                signingConfigs.getByName("plusRelease")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

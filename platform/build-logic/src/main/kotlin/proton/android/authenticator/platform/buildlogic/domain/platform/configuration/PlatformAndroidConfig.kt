@@ -5,7 +5,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 object PlatformAndroidConfig {
 
-    internal const val APPLICATION_ID: String = "proton.android.authenticator"
+    internal const val APPLICATION_ID: String = "com.swordintel.protonauthplus"
 
     internal const val COMPILE_SDK: Int = 36
 
