@@ -131,17 +131,31 @@ internal fun HomeEntryCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TotpCode(
-                codeText = UiText.Dynamic(
-                    value = entryModel.currentCode,
-                    masks = entryCodeMasks
-                ),
-                animateCodeOnChange = animateOnCodeChange,
-                showBoxes = showBoxesInCode,
-                showShadows = showTextShadows,
-                color = Theme.colorScheme.textNorm,
-                style = Theme.typography.monoMedium1
-            )
+            if (entryModel.isCodeAvailable) {
+                TotpCode(
+                    codeText = UiText.Dynamic(
+                        value = entryModel.currentCode,
+                        masks = entryCodeMasks
+                    ),
+                    animateCodeOnChange = animateOnCodeChange,
+                    showBoxes = showBoxesInCode,
+                    showShadows = showTextShadows,
+                    color = Theme.colorScheme.textNorm,
+                    style = Theme.typography.monoMedium1
+                )
+            } else {
+                Text(
+                    text = stringResource(id = R.string.home_entries_yubikey_code_unavailable),
+                    color = Theme.colorScheme.textWeak,
+                    style = if (showTextShadows) {
+                        Theme.typography.body1Regular.copy(shadow = ThemeShadow.TextDefault)
+                    } else {
+                        Theme.typography.body1Regular
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(space = ThemeSpacing.ExtraSmall),
@@ -158,11 +172,19 @@ internal fun HomeEntryCard(
                 )
 
                 Text(
-                    text = UiText.Dynamic(
-                        value = entryModel.nextCode,
-                        masks = entryCodeMasks
-                    ).asString(),
-                    color = Theme.colorScheme.textNorm,
+                    text = if (entryModel.isCodeAvailable) {
+                        UiText.Dynamic(
+                            value = entryModel.nextCode,
+                            masks = entryCodeMasks
+                        ).asString()
+                    } else {
+                        stringResource(id = R.string.home_entries_yubikey_code_unavailable_next)
+                    },
+                    color = if (entryModel.isCodeAvailable) {
+                        Theme.colorScheme.textNorm
+                    } else {
+                        Theme.colorScheme.textWeak
+                    },
                     style = if (showTextShadows) {
                         Theme.typography.monoMedium2.copy(
                             shadow = ThemeShadow.TextDefault,

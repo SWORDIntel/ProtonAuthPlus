@@ -301,6 +301,16 @@ internal class HomeMasterViewModel @Inject constructor(
     internal fun onCopyEntryCode(entryId: String) {
         val readyState = stateFlow.value as? HomeMasterState.Ready ?: return
         val entry = readyState.entryModel(entryId) ?: return
+
+        if (!entry.isCodeAvailable) {
+            viewModelScope.launch {
+                dispatchSnackbarEventUseCase(
+                    SnackbarEvent(messageResId = R.string.home_snackbar_message_yubikey_code_unavailable)
+                )
+            }
+            return
+        }
+
         copyToClipboardUseCase(text = entry.currentCode, isSensitive = readyState.areCodesHidden)
             .let { isSupported ->
                 SnackbarEvent(messageResId = R.string.home_snackbar_message_entry_copied)

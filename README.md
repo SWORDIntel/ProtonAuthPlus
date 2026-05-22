@@ -3,8 +3,8 @@
 This is an unofficial hardened fork of Proton Authenticator for Android.
 
 It is not the official Proton Authenticator distribution and it is not published
-through Google Play from this repository. Build and install it from source if you
-want to test this fork.
+through Google Play from this repository. Build from source or install APKs only
+from a release channel you trust.
 
 The upstream project remains Proton Authenticator by Proton AG. This fork keeps
 the upstream GPLv3 license and copyright notices while adding security-focused
@@ -23,6 +23,33 @@ The F-Droid flavored release APK builds as:
 ```text
 com.swordintel.protonauthplus.fdroid
 ```
+
+Android treats each application id as a separate app. The F-Droid release build
+does not replace the official Proton Authenticator app or the Play-flavored
+build; migrate or import entries explicitly when moving between apps.
+
+## Install and update
+
+For day-to-day testing, install a debug build from Android Studio or run:
+
+```shell
+./gradlew :app:installFdroidProdDebug
+```
+
+For user-facing APKs, build and verify the signed F-Droid production release:
+
+```shell
+./scripts/verifyFdroidProdRelease.sh
+```
+
+The APK is written to `app/build/outputs/apk/fdroidProd/release/`.
+
+Updates require the new APK to use the same application id and signing key as
+the installed app. A differently signed APK cannot update an existing install;
+Android will require uninstalling the old app first, which removes local app
+data unless you have exported or backed it up. Hardware-backed YubiKey entries
+cannot be exported from the phone, so keep account recovery codes or a second
+enrolled hardware key before replacing installs.
 
 ## Hardened fork upgrades
 
@@ -70,7 +97,7 @@ plan for any account moved to the YubiKey.
 See [docs/hardening-yubikey-oath.md](./docs/hardening-yubikey-oath.md) for the
 implementation notes and remaining polish work.
 
-## How to build
+## Build and release docs
 
 If you want to build the app locally, please refer to the [BUILD.md](./docs/public/BUILD.md) file.
 

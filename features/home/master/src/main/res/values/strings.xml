@@ -26,8 +26,11 @@
     <string name="home_empty_search_subtitle">Try searching using different spelling or keywords.</string>
 
     <string name="home_entries_no_issuer">No issuer</string>
+    <string name="home_entries_yubikey_code_unavailable">Connect YubiKey</string>
+    <string name="home_entries_yubikey_code_unavailable_next">Unavailable</string>
 
     <string name="home_snackbar_message_entry_copied">Entry copied</string>
+    <string name="home_snackbar_message_yubikey_code_unavailable">Connect your YubiKey to view this code</string>
     <string name="home_snackbar_message_entry_rearrange_failed">There was an error rearranging the entry</string>
     <string name="home_snackbar_message_entry_sync_disabled">Device sync is disabled</string>
     <string name="home_snackbar_message_entry_sync_unauthorized">Syncing has been disabled. Please log in to your Proton account again.</string>

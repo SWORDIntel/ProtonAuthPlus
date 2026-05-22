@@ -19,6 +19,7 @@
 package proton.android.authenticator.features.home.master.presentation
 
 import proton.android.authenticator.business.entrycodes.domain.EntryCode
+import proton.android.authenticator.business.entrycodes.domain.EntryCodeAvailability
 import proton.android.authenticator.features.shared.entries.presentation.EntryModel
 
 internal class HomeMasterEntryModel(
@@ -35,6 +36,8 @@ internal class HomeMasterEntryModel(
     internal val currentCode: String = entryCode.currentCode
 
     internal val nextCode: String = entryCode.nextCode
+
+    internal val isCodeAvailable: Boolean = entryCode.availability == EntryCodeAvailability.Available
 
     internal val totalSeconds: Int = entryModel.period
 

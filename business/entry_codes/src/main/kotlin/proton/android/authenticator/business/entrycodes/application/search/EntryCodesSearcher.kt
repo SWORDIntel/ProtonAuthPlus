@@ -28,12 +28,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.isActive
-import proton.android.authenticator.business.entrycodes.domain.EntryCode
 import proton.android.authenticator.AuthenticatorCodeResponseModel
+import proton.android.authenticator.business.entrycodes.domain.EntryCode
+import proton.android.authenticator.business.entrycodes.domain.EntryCodeAvailability
 import proton.android.authenticator.commonrust.AuthenticatorMobileClientInterface
 import proton.android.authenticator.commonrust.MobileTotpGeneratorCallback
 import proton.android.authenticator.commonrust.MobileTotpGeneratorInterface
@@ -143,7 +144,8 @@ internal class EntryCodesSearcher @Inject constructor(
         private const val YUBIKEY_OATH_URI_PREFIX = "yubikey-oath://"
         private val HARDWARE_CODE_UNAVAILABLE = EntryCode(
             currentCode = "------",
-            nextCode = "------"
+            nextCode = "------",
+            availability = EntryCodeAvailability.Unavailable
         )
         private val YUBIKEY_POLL_INTERVAL = 1.seconds
     }

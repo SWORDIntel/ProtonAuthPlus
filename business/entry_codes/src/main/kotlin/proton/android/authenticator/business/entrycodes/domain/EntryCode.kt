@@ -20,5 +20,11 @@ package proton.android.authenticator.business.entrycodes.domain
 
 data class EntryCode(
     val currentCode: String,
-    val nextCode: String
+    val nextCode: String,
+    val availability: EntryCodeAvailability = EntryCodeAvailability.Available
 )
+
+enum class EntryCodeAvailability {
+    Available,
+    Unavailable
+}
