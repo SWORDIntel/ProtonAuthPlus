@@ -24,19 +24,6 @@ The F-Droid flavored release APK builds as:
 com.swordintel.protonauthplus.fdroid
 ```
 
-Release signing is configured through environment variables or an ignored local
-`private.properties` file:
-
-```text
-PROTON_AUTH_PLUS_STORE_FILE=/path/to/proton-auth-plus-release.jks
-PROTON_AUTH_PLUS_STORE_PASSWORD=...
-PROTON_AUTH_PLUS_KEY_ALIAS=proton-auth-plus
-PROTON_AUTH_PLUS_KEY_PASSWORD=...
-```
-
-The release key must be backed up securely. Android updates require every future
-APK for the same package id to be signed with the same key.
-
 ## Hardened fork upgrades
 
 This fork is aimed at reducing phone-resident TOTP seed exposure for high-risk
