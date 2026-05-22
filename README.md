@@ -1,16 +1,19 @@
-# Proton Authenticator
+# Proton Authenticator +
 
-This repository contains the source code for the Proton Authenticator Android application.
+This is an unofficial hardened fork of Proton Authenticator for Android.
 
-[<img src="https://play.google.com/intl/en_us/badges/images/generic/en-play-badge.png"
-alt="Get it on Google Play"
-height="80">](https://play.google.com/store/apps/details?id=proton.android.authenticator)
+It is not the official Proton Authenticator distribution and it is not published
+through Google Play from this repository. Build and install it from source if you
+want to test this fork.
+
+The upstream project remains Proton Authenticator by Proton AG. This fork keeps
+the upstream GPLv3 license and copyright notices while adding security-focused
+changes under the `Proton Authenticator +` app label.
 
 ## Hardened fork upgrades
 
-This working tree includes a hardened fork aimed at reducing phone-resident
-TOTP seed exposure for high-risk use cases, especially runtime plaintext seed
-material in app memory.
+This fork is aimed at reducing phone-resident TOTP seed exposure for high-risk
+use cases, especially runtime plaintext seed material in app memory.
 
 - Always-on `FLAG_SECURE` blocks screenshots and insecure screen capture for the
   app UI.
@@ -38,6 +41,17 @@ material in app memory.
   cannot and should not export their seeds.
 - If the YubiKey is removed, hardware-backed codes fail closed and render blank
   placeholder codes instead of retaining stale valid OTPs.
+
+## Important limits
+
+Local software-stored TOTP entries still need the secret in process memory while
+generating codes. This fork reduces extra UI-layer retention of decrypted entry
+objects, but true seed non-exposure requires migrating the entry to a hardware
+backend such as YubiKey OATH.
+
+Hardware-backed entries deliberately cannot be exported or backed up by the
+phone because the seed is no longer phone-resident. Keep an independent recovery
+plan for any account moved to the YubiKey.
 
 See [docs/hardening-yubikey-oath.md](./docs/hardening-yubikey-oath.md) for the
 implementation notes and remaining polish work.
