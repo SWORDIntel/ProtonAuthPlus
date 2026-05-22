@@ -22,6 +22,7 @@ import android.app.ComponentCaller
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -77,6 +78,8 @@ internal class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        enforceSecureWindow()
+
         viewModel.onRegisterOrchestrators(context = this)
 
         enableEdgeToEdge()
@@ -98,7 +101,7 @@ internal class MainActivity : FragmentActivity() {
                                 val context = LocalContext.current
                                 val bottomSheetNavigator = rememberBottomSheetNavigator()
                                 val navController = rememberNavController(bottomSheetNavigator)
-                                setSecureMode(isSecure = state.isBiometricLockEnabled)
+                                enforceSecureWindow()
 
                                 val isDarkTheme = isDarkTheme(state.themeType)
                                 setStatusBarTheme(isDarkTheme)
@@ -163,9 +166,14 @@ internal class MainActivity : FragmentActivity() {
         }
     }
 
-    private fun setSecureMode(isSecure: Boolean) {
+    private fun enforceSecureWindow() {
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            setRecentsScreenshotEnabled(!isSecure)
+            setRecentsScreenshotEnabled(false)
         }
     }
 

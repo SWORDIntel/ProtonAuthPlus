@@ -317,7 +317,9 @@ internal class HomeMasterViewModel @Inject constructor(
         val readyState = stateFlow.value as? HomeMasterState.Ready ?: return
         viewModelScope.launch {
             sortEntriesUseCase(
-                entryModels = readyState.entryModels.map(HomeMasterEntryModel::entryModel),
+                entryPositions = readyState.entryModels.associate { entryModel ->
+                    entryModel.id to entryModel.position
+                },
                 newSortingMap = newSortingMap
             ).fold(
                 onFailure = {

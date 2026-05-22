@@ -71,8 +71,18 @@ internal abstract class BusinessEntriesModule {
         impl: CreateEntryCommandHandler
     ): CommandHandler<*, *, *>
 
+    @[Binds Singleton IntoMap CommandHandlerKey(CreateEntryCommand.FromYubiKeyTotp::class)]
+    internal abstract fun bindCreateEntryFromYubiKeyTotpCommandHandler(
+        impl: CreateEntryCommandHandler
+    ): CommandHandler<*, *, *>
+
     @[Binds Singleton IntoMap CommandHandlerKey(CreateEntryCommand.FromUri::class)]
     internal abstract fun bindCreateEntryFromUriCommandHandler(impl: CreateEntryCommandHandler): CommandHandler<*, *, *>
+
+    @[Binds Singleton IntoMap CommandHandlerKey(CreateEntryCommand.FromYubiKeyUri::class)]
+    internal abstract fun bindCreateEntryFromYubiKeyUriCommandHandler(
+        impl: CreateEntryCommandHandler
+    ): CommandHandler<*, *, *>
 
     @[Binds Singleton IntoMap CommandHandlerKey(DeleteEntryCommand::class)]
     internal abstract fun bindDeleteEntryCommandHandler(impl: DeleteEntryCommandHandler): CommandHandler<*, *, *>
@@ -117,6 +127,11 @@ internal abstract class BusinessEntriesModule {
 
     @[Binds Singleton IntoMap CommandHandlerKey(UpdateEntryCommand.FromTotp::class)]
     internal abstract fun bindUpdateEntryFromTotpCommandHandler(
+        impl: UpdateEntryCommandHandler
+    ): CommandHandler<*, *, *>
+
+    @[Binds Singleton IntoMap CommandHandlerKey(UpdateEntryCommand.ToYubiKeyTotp::class)]
+    internal abstract fun bindUpdateEntryToYubiKeyTotpCommandHandler(
         impl: UpdateEntryCommandHandler
     ): CommandHandler<*, *, *>
 

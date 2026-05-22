@@ -21,6 +21,7 @@ package proton.android.authenticator.features.shared.usecases.backups
 import proton.android.authenticator.business.backups.application.generate.GenerateBackupCommand
 import proton.android.authenticator.business.backups.application.generate.GenerateBackupReason
 import proton.android.authenticator.business.backups.domain.BackupEntry
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.features.shared.entries.presentation.EntryModel
 import proton.android.authenticator.shared.common.domain.answers.Answer
 import proton.android.authenticator.shared.common.domain.infrastructure.commands.CommandBus
@@ -38,7 +39,8 @@ class GenerateBackupUseCase @Inject constructor(private val commandBus: CommandB
                 issuer = entryModel.issuer,
                 secret = entryModel.secret,
                 note = entryModel.note,
-                entryTypeOrdinal = entryModel.type.ordinal
+                entryTypeOrdinal = entryModel.type.ordinal,
+                isHardwareBacked = entryModel.credentialBackend is EntryCredentialBackend.YubiKeyOath
             )
         }
         .let(::GenerateBackupCommand)

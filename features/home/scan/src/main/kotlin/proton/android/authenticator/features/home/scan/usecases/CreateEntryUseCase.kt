@@ -26,8 +26,12 @@ import javax.inject.Inject
 
 internal class CreateEntryUseCase @Inject constructor(private val commandBus: CommandBus) {
 
-    internal suspend operator fun invoke(uri: String): Answer<Unit, CreateEntryReason> =
-        CreateEntryCommand.FromUri(uri = uri)
+    internal suspend operator fun invoke(uri: String, isYubiKeyBacked: Boolean): Answer<Unit, CreateEntryReason> =
+        if (isYubiKeyBacked) {
+            CreateEntryCommand.FromYubiKeyUri(uri = uri)
+        } else {
+            CreateEntryCommand.FromUri(uri = uri)
+        }
             .let { command -> commandBus.dispatch(command) }
 
 }

@@ -19,9 +19,11 @@
 package proton.android.authenticator.business.backups.application.generate
 
 import proton.android.authenticator.business.backups.domain.BackupFileCreationError
+import proton.android.authenticator.business.backups.domain.BackupHardwareBackedEntriesError
 import proton.android.authenticator.business.backups.domain.BackupMissingFileNameError
 import proton.android.authenticator.business.backups.domain.BackupNoEntriesError
 import proton.android.authenticator.business.backups.domain.BackupNotEnabledError
+import proton.android.authenticator.business.backups.domain.BackupPasswordRequiredError
 import proton.android.authenticator.business.shared.domain.errors.ErrorLoggingUtils
 import proton.android.authenticator.shared.common.domain.answers.Answer
 import proton.android.authenticator.shared.common.domain.infrastructure.commands.CommandHandler
@@ -51,6 +53,20 @@ internal class GenerateBackupCommandHandler @Inject constructor(
             throwable = e,
             message = "Could not generate backup due to backup not enabled",
             reason = GenerateBackupReason.NotEnabled,
+            tag = TAG
+        )
+    } catch (e: BackupPasswordRequiredError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not generate backup because an encryption password is required",
+            reason = GenerateBackupReason.PasswordRequired,
+            tag = TAG
+        )
+    } catch (e: BackupHardwareBackedEntriesError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not generate backup because hardware-backed entries do not expose seeds",
+            reason = GenerateBackupReason.HardwareBackedEntries,
             tag = TAG
         )
     } catch (e: BackupMissingFileNameError) {

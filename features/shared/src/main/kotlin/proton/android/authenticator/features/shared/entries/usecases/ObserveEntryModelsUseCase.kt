@@ -25,11 +25,13 @@ import kotlinx.coroutines.flow.mapLatest
 import proton.android.authenticator.business.entries.application.findall.FindAllEntriesQuery
 import proton.android.authenticator.business.entries.domain.Entry
 import proton.android.authenticator.business.entries.domain.EntryAlgorithm
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.business.entries.domain.EntryType
 import proton.android.authenticator.commonrust.AuthenticatorIssuerMapperInterface
 import proton.android.authenticator.commonrust.AuthenticatorMobileClientInterface
 import proton.android.authenticator.features.shared.entries.presentation.EntryModel
 import proton.android.authenticator.shared.common.domain.infrastructure.queries.QueryBus
+import proton.android.authenticator.shared.crypto.domain.contexts.EncryptionContext
 import proton.android.authenticator.shared.crypto.domain.contexts.EncryptionContextProvider
 import proton.android.authenticator.shared.crypto.domain.tags.EncryptionTag
 import javax.inject.Inject
@@ -48,35 +50,58 @@ class ObserveEntryModelsUseCase @Inject constructor(
             .distinctUntilChanged()
             .mapLatest { entries ->
                 encryptionContextProvider.withEncryptionContext {
-                    entries.map { entry ->
-                        authenticatorClient.deserializeEntry(
-                            entry = decrypt(entry.content, EncryptionTag.EntryContent)
-                        ).let { authenticatorEntryModel ->
-                            authenticatorEntryModel to authenticatorClient.getTotpParams(
-                                entry = authenticatorEntryModel
-                            )
-                        }.let { (authenticatorEntryModel, authenticatorTotpParams) ->
-                            EntryModel(
-                                id = entry.id,
-                                position = entry.position,
-                                createdAt = entry.createdAt,
-                                modifiedAt = entry.modifiedAt,
-                                isDeleted = entry.isDeleted,
-                                isSynced = entry.isSynced,
-                                name = authenticatorEntryModel.name,
-                                issuer = authenticatorEntryModel.issuer,
-                                note = authenticatorEntryModel.note,
-                                secret = authenticatorEntryModel.secret,
-                                uri = authenticatorEntryModel.uri,
-                                period = authenticatorEntryModel.period.toInt(),
-                                type = EntryType.from(authenticatorEntryModel.entryType.ordinal),
-                                algorithm = EntryAlgorithm.from(authenticatorTotpParams.algorithm.ordinal),
-                                digits = authenticatorTotpParams.digits.toInt(),
-                                iconUrl = authenticatorIssuerMapper.lookup(authenticatorEntryModel.issuer)?.iconUrl
-                            )
-                        }
-                    }
+                    entries.map { entry -> entryToModel(entry) }
                 }.sortedWith(compareBy(EntryModel::position).thenByDescending(EntryModel::modifiedAt))
             }
+
+    private fun EncryptionContext.entryToModel(entry: Entry): EntryModel = when (val backend = entry.credentialBackend) {
+        EntryCredentialBackend.LocalEncrypted -> authenticatorClient.deserializeEntry(
+            entry = decrypt(entry.content, EncryptionTag.EntryContent)
+        ).let { authenticatorEntryModel ->
+            authenticatorEntryModel to authenticatorClient.getTotpParams(
+                entry = authenticatorEntryModel
+            )
+        }.let { (authenticatorEntryModel, authenticatorTotpParams) ->
+            EntryModel(
+                id = entry.id,
+                position = entry.position,
+                createdAt = entry.createdAt,
+                modifiedAt = entry.modifiedAt,
+                isDeleted = entry.isDeleted,
+                isSynced = entry.isSynced,
+                name = authenticatorEntryModel.name,
+                issuer = authenticatorEntryModel.issuer,
+                note = authenticatorEntryModel.note,
+                secret = authenticatorEntryModel.secret,
+                uri = authenticatorEntryModel.uri,
+                period = authenticatorEntryModel.period.toInt(),
+                type = EntryType.from(authenticatorEntryModel.entryType.ordinal),
+                algorithm = EntryAlgorithm.from(authenticatorTotpParams.algorithm.ordinal),
+                digits = authenticatorTotpParams.digits.toInt(),
+                iconUrl = authenticatorIssuerMapper.lookup(authenticatorEntryModel.issuer)?.iconUrl,
+                credentialBackend = backend
+            )
+        }
+
+        is EntryCredentialBackend.YubiKeyOath -> EntryModel(
+            id = entry.id,
+            position = entry.position,
+            createdAt = entry.createdAt,
+            modifiedAt = entry.modifiedAt,
+            isDeleted = entry.isDeleted,
+            isSynced = entry.isSynced,
+            name = backend.name,
+            issuer = backend.issuer,
+            note = backend.note,
+            secret = "",
+            uri = backend.codeUri,
+            period = backend.period,
+            type = EntryType.TOTP,
+            algorithm = backend.algorithm,
+            digits = backend.digits,
+            iconUrl = authenticatorIssuerMapper.lookup(backend.issuer)?.iconUrl,
+            credentialBackend = backend
+        )
+    }
 
 }

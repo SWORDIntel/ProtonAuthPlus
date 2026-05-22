@@ -22,8 +22,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import proton.android.authenticator.business.entries.domain.EntryAlgorithm
 import proton.android.authenticator.business.entries.domain.EntryType
@@ -31,9 +36,14 @@ import proton.android.authenticator.features.home.manual.R
 import proton.android.authenticator.features.home.manual.presentation.HomeManualFormModel
 import proton.android.authenticator.shared.ui.domain.components.menus.FormDropdownMenu
 import proton.android.authenticator.shared.ui.domain.components.menus.FormRevealMenu
+import proton.android.authenticator.shared.ui.domain.components.rows.ToggleRow
 import proton.android.authenticator.shared.ui.domain.components.tabs.FormTab
 import proton.android.authenticator.shared.ui.domain.components.textfields.FormPlainTextField
+import proton.android.authenticator.shared.ui.domain.models.UiText
+import proton.android.authenticator.shared.ui.domain.theme.Theme
 import proton.android.authenticator.shared.ui.domain.theme.ThemePadding
+import proton.android.authenticator.shared.ui.domain.theme.ThemeSpacing
+import proton.android.authenticator.shared.ui.R as uiR
 
 @Composable
 internal fun HomeManualTotpForm(
@@ -45,6 +55,8 @@ internal fun HomeManualTotpForm(
     onTimeIntervalChange: (Int) -> Unit,
     onAlgorithmChange: (EntryAlgorithm) -> Unit,
     onTypeChange: (EntryType) -> Unit,
+    onYubiKeyBackedChange: (Boolean) -> Unit,
+    onMigrateToYubiKey: (HomeManualFormModel) -> Unit,
     onShowAdvanceOptions: () -> Unit,
     modifier: Modifier = Modifier
 ) = with(formModel) {
@@ -79,6 +91,37 @@ internal fun HomeManualTotpForm(
             placeholder = stringResource(id = R.string.home_manual_form_issuer_label),
             onValueChange = onIssuerChange
         )
+
+        if (canUseYubiKeyBackend) {
+            ToggleRow(
+                titleText = UiText.Resource(id = R.string.home_manual_form_yubikey_backend_title),
+                descriptionText = UiText.Resource(id = R.string.home_manual_form_yubikey_backend_description),
+                isChecked = isYubiKeyBacked,
+                onCheckedChange = onYubiKeyBackedChange
+            )
+        }
+
+        if (canMigrateToYubiKey) {
+            Button(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { onMigrateToYubiKey(formModel) },
+                colors = ButtonDefaults.buttonColors().copy(
+                    containerColor = Theme.colorScheme.aux,
+                    contentColor = Theme.colorScheme.white
+                )
+            ) {
+                Icon(
+                    painter = painterResource(id = uiR.drawable.ic_key),
+                    contentDescription = null
+                )
+
+                Text(
+                    modifier = Modifier.padding(start = ThemeSpacing.Small),
+                    text = stringResource(id = R.string.home_manual_form_migrate_yubikey_action),
+                    style = Theme.typography.body1Regular
+                )
+            }
+        }
 
         FormRevealMenu(
             modifier = Modifier.padding(top = ThemePadding.Medium),

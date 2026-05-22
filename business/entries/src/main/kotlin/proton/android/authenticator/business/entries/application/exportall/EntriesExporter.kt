@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import proton.android.authenticator.business.entries.domain.EntriesRepository
 import proton.android.authenticator.business.entries.domain.Entry
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.business.shared.domain.infrastructure.files.FileWriter
 import proton.android.authenticator.commonrust.AuthenticatorMobileClientInterface
 import proton.android.authenticator.shared.common.domain.dispatchers.AppDispatchers
@@ -41,6 +42,11 @@ internal class EntriesExporter @Inject constructor(
     suspend fun export(destinationUri: Uri, password: String?): Int = repository.findAll()
         .first()
         .filterNot(Entry::isDeleted)
+        .also { entries ->
+            if (entries.any { it.credentialBackend is EntryCredentialBackend.YubiKeyOath }) {
+                throw ExportHardwareBackedEntriesError()
+            }
+        }
         .let { entries ->
             encryptionContextProvider.withEncryptionContext {
                 entries.map { entry ->
@@ -52,11 +58,10 @@ internal class EntriesExporter @Inject constructor(
         }
         .let { entryModels ->
             entryModels.size to withContext(appDispatchers.default) {
-                if (password == null) {
-                    authenticatorClient.exportEntries(entryModels)
-                } else {
-                    authenticatorClient.exportEntriesWithPassword(entryModels, password)
-                }
+                val exportPassword = password?.takeIf(String::isNotBlank)
+                    ?: throw ExportPasswordRequiredError()
+
+                authenticatorClient.exportEntriesWithPassword(entryModels, exportPassword)
             }
         }
         .let { (modelsCount, content) ->

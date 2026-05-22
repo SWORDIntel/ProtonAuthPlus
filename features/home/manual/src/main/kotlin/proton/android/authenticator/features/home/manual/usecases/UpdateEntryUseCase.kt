@@ -51,4 +51,18 @@ internal class UpdateEntryUseCase @Inject constructor(private val commandBus: Co
         )
     }.let { command -> commandBus.dispatch(command) }
 
+    internal suspend fun migrateToYubiKey(
+        entryId: String,
+        formModel: HomeManualFormModel
+    ): Answer<Unit, UpdateEntryReason> = UpdateEntryCommand.ToYubiKeyTotp(
+        id = entryId,
+        name = formModel.title,
+        secret = formModel.secret,
+        issuer = formModel.issuer,
+        period = formModel.timeInterval,
+        digits = formModel.digits,
+        algorithm = formModel.algorithm,
+        position = formModel.position
+    ).let { command -> commandBus.dispatch(command) }
+
 }

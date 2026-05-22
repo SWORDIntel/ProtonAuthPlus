@@ -26,9 +26,11 @@ import kotlinx.coroutines.withContext
 import proton.android.authenticator.business.backups.domain.Backup
 import proton.android.authenticator.business.backups.domain.BackupEntry
 import proton.android.authenticator.business.backups.domain.BackupFileCreationError
+import proton.android.authenticator.business.backups.domain.BackupHardwareBackedEntriesError
 import proton.android.authenticator.business.backups.domain.BackupMissingFileNameError
 import proton.android.authenticator.business.backups.domain.BackupNoEntriesError
 import proton.android.authenticator.business.backups.domain.BackupNotEnabledError
+import proton.android.authenticator.business.backups.domain.BackupPasswordRequiredError
 import proton.android.authenticator.business.backups.domain.BackupRepository
 import proton.android.authenticator.business.shared.domain.infrastructure.directories.DirectoryReader
 import proton.android.authenticator.business.shared.domain.infrastructure.files.FileDeleter
@@ -57,6 +59,9 @@ internal class BackupGenerator @Inject constructor(
     internal suspend fun generate(backupEntries: List<BackupEntry>) {
         if (backupEntries.isEmpty()) {
             throw BackupNoEntriesError()
+        }
+        if (backupEntries.any(BackupEntry::isHardwareBacked)) {
+            throw BackupHardwareBackedEntriesError()
         }
 
         repository.find()
@@ -97,16 +102,16 @@ internal class BackupGenerator @Inject constructor(
         backupEntries.map(BackupEntry::toModel)
             .let { entryModels ->
                 withContext(appDispatchers.default) {
-                    backup.encryptedPassword
+                    val backupDecryptedPassword = backup.encryptedPassword
                         ?.let { backupEncryptedPassword ->
                             encryptionContextProvider.withEncryptionContext {
                                 decrypt(backupEncryptedPassword)
                             }
                         }
-                        ?.let { backupDecryptedPassword ->
-                            authenticatorClient.exportEntriesWithPassword(entryModels, backupDecryptedPassword)
-                        }
-                        ?: authenticatorClient.exportEntries(entryModels)
+                        ?.takeIf(String::isNotBlank)
+                        ?: throw BackupPasswordRequiredError()
+
+                    authenticatorClient.exportEntriesWithPassword(entryModels, backupDecryptedPassword)
                 }
             }
             .also { backupContent ->

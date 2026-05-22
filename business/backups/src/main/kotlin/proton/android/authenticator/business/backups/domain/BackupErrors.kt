@@ -25,3 +25,7 @@ internal class BackupNotEnabledError : Exception()
 internal class BackupMissingFileNameError : Exception()
 
 internal class BackupFileCreationError : Exception()
+
+internal class BackupPasswordRequiredError : Exception()
+
+internal class BackupHardwareBackedEntriesError : Exception()

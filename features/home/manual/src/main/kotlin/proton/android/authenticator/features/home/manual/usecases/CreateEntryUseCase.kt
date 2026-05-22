@@ -30,14 +30,27 @@ internal class CreateEntryUseCase @Inject constructor(private val commandBus: Co
 
     internal suspend operator fun invoke(formModel: HomeManualFormModel): Answer<Unit, CreateEntryReason> =
         when (formModel.type) {
-            EntryType.TOTP -> CreateEntryCommand.FromTotp(
-                name = formModel.title,
-                secret = formModel.secret,
-                issuer = formModel.issuer,
-                period = formModel.timeInterval,
-                digits = formModel.digits,
-                algorithm = formModel.algorithm
-            )
+            EntryType.TOTP -> {
+                if (formModel.isYubiKeyBacked) {
+                    CreateEntryCommand.FromYubiKeyTotp(
+                        name = formModel.title,
+                        secret = formModel.secret,
+                        issuer = formModel.issuer,
+                        period = formModel.timeInterval,
+                        digits = formModel.digits,
+                        algorithm = formModel.algorithm
+                    )
+                } else {
+                    CreateEntryCommand.FromTotp(
+                        name = formModel.title,
+                        secret = formModel.secret,
+                        issuer = formModel.issuer,
+                        period = formModel.timeInterval,
+                        digits = formModel.digits,
+                        algorithm = formModel.algorithm
+                    )
+                }
+            }
 
             EntryType.STEAM -> CreateEntryCommand.FromSteam(
                 name = formModel.title,

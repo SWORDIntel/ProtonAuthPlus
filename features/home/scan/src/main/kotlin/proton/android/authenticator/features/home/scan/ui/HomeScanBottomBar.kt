@@ -36,9 +36,11 @@ import proton.android.authenticator.shared.ui.R as uiR
 
 @Composable
 internal fun HomeScanBottomBar(
+    isYubiKeyBacked: Boolean,
     onCloseClick: () -> Unit,
     onEnterManuallyClick: () -> Unit,
     onOpenGalleryClick: () -> Unit,
+    onYubiKeyBackedClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier) {
@@ -80,6 +82,16 @@ internal fun HomeScanBottomBar(
                     painter = painterResource(id = uiR.drawable.ic_image),
                     contentDescription = null,
                     tint = Theme.colorScheme.white
+                )
+            }
+
+            IconButton(
+                onClick = onYubiKeyBackedClick
+            ) {
+                Icon(
+                    painter = painterResource(id = uiR.drawable.ic_key),
+                    contentDescription = null,
+                    tint = if (isYubiKeyBacked) Theme.colorScheme.aux else Theme.colorScheme.white
                 )
             }
         }

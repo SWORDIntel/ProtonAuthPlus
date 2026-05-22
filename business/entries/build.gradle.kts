@@ -16,4 +16,6 @@ dependencies {
     implementation(libs.core.accountManager)
     implementation(libs.core.network)
     implementation(libs.kotlinx.datetime)
+    implementation(libs.yubikit.android)
+    implementation(libs.yubikit.oath)
 }

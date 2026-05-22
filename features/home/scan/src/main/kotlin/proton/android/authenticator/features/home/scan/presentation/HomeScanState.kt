@@ -23,7 +23,8 @@ import androidx.compose.runtime.Stable
 @Stable
 internal data class HomeScanState(
     internal val hasCameraPermission: Boolean?,
-    internal val event: HomeScanEvent
+    internal val event: HomeScanEvent,
+    internal val isYubiKeyBacked: Boolean
 ) {
 
     internal val showBottomBar: Boolean = hasCameraPermission == true
@@ -32,7 +33,8 @@ internal data class HomeScanState(
 
         internal val Initial: HomeScanState = HomeScanState(
             hasCameraPermission = null,
-            event = HomeScanEvent.Idle
+            event = HomeScanEvent.Idle,
+            isYubiKeyBacked = false
         )
 
     }

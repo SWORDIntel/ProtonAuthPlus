@@ -32,10 +32,22 @@ internal class CreateEntryCommandHandler @Inject constructor(
 ) : CommandHandler<CreateEntryCommand, Unit, CreateEntryReason> {
 
     override suspend fun handle(command: CreateEntryCommand): Answer<Unit, CreateEntryReason> = try {
-        command.toModel(authenticatorClient)
-            .let { model -> creator.create(model = model) }
+        when (command) {
+            is CreateEntryCommand.FromYubiKeyTotp -> creator.createYubiKeyTotp(command)
+            is CreateEntryCommand.FromYubiKeyUri -> command.toYubiKeyTotpCommand(authenticatorClient)
+                .let { yubiKeyCommand -> creator.createYubiKeyTotp(yubiKeyCommand) }
+            else -> command.toModel(authenticatorClient)
+                .let { model -> creator.create(model = model) }
+        }
         AuthenticatorLogger.i(TAG, "Successfully created entry")
         Answer.Success(Unit)
+    } catch (e: YubiKeyOathEnrollmentLockedError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not create YubiKey-backed entry because OATH is locked",
+            reason = CreateEntryReason.Unknown,
+            tag = TAG
+        )
     } catch (e: AuthenticatorException.InvalidName) {
         ErrorLoggingUtils.logAndReturnFailure(
             throwable = e,

@@ -30,7 +30,9 @@ internal data class BackupsErrorsState(private val errorReason: GenerateBackupRe
         when (errorReason) {
             GenerateBackupReason.CannotGenerate,
             GenerateBackupReason.NoEntries,
-            GenerateBackupReason.NotEnabled -> R.string.backup_error_dialog_message_error_unknown
+            GenerateBackupReason.NotEnabled,
+            GenerateBackupReason.PasswordRequired,
+            GenerateBackupReason.HardwareBackedEntries -> R.string.backup_error_dialog_message_error_unknown
 
             GenerateBackupReason.MissingFileName,
             GenerateBackupReason.FileCreationFailed -> R.string.backup_error_dialog_message_error_folder

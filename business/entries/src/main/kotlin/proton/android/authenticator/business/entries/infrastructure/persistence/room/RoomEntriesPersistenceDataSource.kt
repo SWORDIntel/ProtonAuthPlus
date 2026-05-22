@@ -21,6 +21,8 @@ package proton.android.authenticator.business.entries.infrastructure.persistence
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import proton.android.authenticator.business.entries.domain.Entry
+import proton.android.authenticator.business.entries.domain.EntryAlgorithm
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.business.shared.domain.infrastructure.persistence.PersistenceDataSource
 import proton.android.authenticator.business.shared.infrastructure.persistence.room.entities.entries.EntriesDao
 import proton.android.authenticator.business.shared.infrastructure.persistence.room.entities.entries.EntryEntity
@@ -65,7 +67,19 @@ private fun Entry.toEntity() = EntryEntity(
     modifiedAt = modifiedAt,
     isDeleted = isDeleted,
     isSynced = isSynced,
-    position = position
+    position = position,
+    credentialBackendType = when (val backend = credentialBackend) {
+        EntryCredentialBackend.LocalEncrypted -> BACKEND_LOCAL_ENCRYPTED
+        is EntryCredentialBackend.YubiKeyOath -> BACKEND_YUBIKEY_OATH
+    },
+    hardwareCredentialId = (credentialBackend as? EntryCredentialBackend.YubiKeyOath)?.credentialId,
+    hardwareDeviceId = (credentialBackend as? EntryCredentialBackend.YubiKeyOath)?.deviceId,
+    hardwareName = (credentialBackend as? EntryCredentialBackend.YubiKeyOath)?.name,
+    hardwareIssuer = (credentialBackend as? EntryCredentialBackend.YubiKeyOath)?.issuer,
+    hardwareNote = (credentialBackend as? EntryCredentialBackend.YubiKeyOath)?.note,
+    hardwarePeriod = (credentialBackend as? EntryCredentialBackend.YubiKeyOath)?.period,
+    hardwareAlgorithm = (credentialBackend as? EntryCredentialBackend.YubiKeyOath)?.algorithm?.value,
+    hardwareDigits = (credentialBackend as? EntryCredentialBackend.YubiKeyOath)?.digits
 )
 
 private fun EntryEntity.toDomain() = Entry(
@@ -75,5 +89,26 @@ private fun EntryEntity.toDomain() = Entry(
     modifiedAt = modifiedAt,
     isDeleted = isDeleted,
     isSynced = isSynced,
-    position = position
+    position = position,
+    credentialBackend = toCredentialBackend()
 )
+
+private fun EntryEntity.toCredentialBackend(): EntryCredentialBackend = when (credentialBackendType) {
+    BACKEND_LOCAL_ENCRYPTED -> EntryCredentialBackend.LocalEncrypted
+    BACKEND_YUBIKEY_OATH -> EntryCredentialBackend.YubiKeyOath(
+        credentialId = requireNotNull(hardwareCredentialId) { "Missing YubiKey OATH credential id for $id" },
+        deviceId = hardwareDeviceId,
+        name = hardwareName.orEmpty(),
+        issuer = hardwareIssuer.orEmpty(),
+        note = hardwareNote,
+        period = hardwarePeriod ?: DEFAULT_TOTP_PERIOD,
+        algorithm = hardwareAlgorithm?.let(EntryAlgorithm::from) ?: EntryAlgorithm.SHA1,
+        digits = hardwareDigits ?: DEFAULT_TOTP_DIGITS
+    )
+    else -> error("Unknown credential backend type: $credentialBackendType")
+}
+
+private const val BACKEND_LOCAL_ENCRYPTED = "local_encrypted"
+private const val BACKEND_YUBIKEY_OATH = "yubikey_oath"
+private const val DEFAULT_TOTP_PERIOD = 30
+private const val DEFAULT_TOTP_DIGITS = 6

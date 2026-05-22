@@ -16,16 +16,33 @@
  * along with Proton Authenticator.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package proton.android.authenticator.business.backups.domain
+package proton.android.authenticator.business.entries.domain
 
-data class BackupEntry(
-    internal val id: String,
-    internal val name: String,
-    internal val uri: String,
-    internal val period: UShort,
-    internal val issuer: String,
-    internal val secret: String,
-    internal val note: String?,
-    internal val entryTypeOrdinal: Int,
-    internal val isHardwareBacked: Boolean
-)
+sealed interface EntryCredentialBackend {
+
+    data object LocalEncrypted : EntryCredentialBackend
+
+    data class YubiKeyOath(
+        val credentialId: String,
+        val deviceId: String?,
+        val name: String,
+        val issuer: String,
+        val note: String?,
+        val period: Int,
+        val algorithm: EntryAlgorithm,
+        val digits: Int
+    ) : EntryCredentialBackend {
+
+        val codeUri: String = buildString {
+            append(SCHEME)
+            append("://credential/")
+            append(credentialId)
+            append("?period=")
+            append(period)
+        }
+
+        companion object {
+            const val SCHEME = "yubikey-oath"
+        }
+    }
+}

@@ -58,6 +58,8 @@ internal class BackupWorker @AssistedInject constructor(
                 when (reason) {
                     GenerateBackupReason.MissingFileName,
                     GenerateBackupReason.FileCreationFailed,
+                    GenerateBackupReason.PasswordRequired,
+                    GenerateBackupReason.HardwareBackedEntries,
                     GenerateBackupReason.CannotGenerate -> {
                         AuthenticatorLogger.w(TAG, "Automatic backup failed: $reason")
                             .also { disableAutomaticBackup() }

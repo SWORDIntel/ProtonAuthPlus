@@ -25,7 +25,7 @@ internal data class HomeManualInputs(
     internal val digits: Int?,
     internal val timeInterval: Int?,
     internal val algorithm: EntryAlgorithm?,
-    internal val type: EntryType?,
+    private val entryOptions: HomeManualEntryOptions,
     private val textInputs: HomeManualTextInputs
 ) {
 
@@ -35,4 +35,13 @@ internal data class HomeManualInputs(
 
     internal val issuer: String? = textInputs.issuer
 
+    internal val type: EntryType? = entryOptions.type
+
+    internal val isYubiKeyBacked: Boolean? = entryOptions.isYubiKeyBacked
+
 }
+
+internal data class HomeManualEntryOptions(
+    internal val type: EntryType?,
+    internal val isYubiKeyBacked: Boolean?
+)

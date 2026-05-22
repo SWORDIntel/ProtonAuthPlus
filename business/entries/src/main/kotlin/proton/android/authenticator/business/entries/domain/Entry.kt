@@ -27,5 +27,6 @@ data class Entry(
     val modifiedAt: Long,
     val isDeleted: Boolean,
     val isSynced: Boolean,
-    val position: Int
+    val position: Int,
+    val credentialBackend: EntryCredentialBackend = EntryCredentialBackend.LocalEncrypted
 )

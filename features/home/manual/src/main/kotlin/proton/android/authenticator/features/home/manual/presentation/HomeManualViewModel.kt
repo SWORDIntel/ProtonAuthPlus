@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 import proton.android.authenticator.business.entries.application.create.CreateEntryReason
 import proton.android.authenticator.business.entries.application.update.UpdateEntryReason
 import proton.android.authenticator.business.entries.domain.EntryAlgorithm
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.business.entries.domain.EntryType
 import proton.android.authenticator.features.home.manual.R
 import proton.android.authenticator.features.home.manual.usecases.CreateEntryUseCase
@@ -84,6 +85,8 @@ internal class HomeManualViewModel @Inject constructor(
 
     private val typeFlow = MutableStateFlow<EntryType?>(value = null)
 
+    private val isYubiKeyBackedFlow = MutableStateFlow<Boolean?>(value = null)
+
     private val showAdvanceOptionsFlow = MutableStateFlow<Boolean?>(value = null)
 
     private val formTextInputsFlow = combine(
@@ -93,11 +96,17 @@ internal class HomeManualViewModel @Inject constructor(
         ::HomeManualTextInputs
     )
 
+    private val formEntryOptionsFlow = combine(
+        typeFlow,
+        isYubiKeyBackedFlow,
+        ::HomeManualEntryOptions
+    )
+
     private val formInputsFlow: Flow<HomeManualInputs> = combine(
         digitsFlow,
         timeIntervalFlow,
         algorithmFlow,
-        typeFlow,
+        formEntryOptionsFlow,
         formTextInputsFlow,
         ::HomeManualInputs
     )
@@ -118,6 +127,8 @@ internal class HomeManualViewModel @Inject constructor(
                 timeInterval = formInputs.timeInterval ?: DEFAULT_TIME_INTERVAL,
                 algorithm = formInputs.algorithm ?: DEFAULT_ALGORITHM,
                 type = formInputs.type ?: DEFAULT_TYPE,
+                isYubiKeyBacked = formInputs.isYubiKeyBacked == true,
+                isHardwareBacked = false,
                 position = 0,
                 showAdvanceOptions = showAdvanceOptions == true,
                 isValidSecret = isValidSecret,
@@ -133,6 +144,8 @@ internal class HomeManualViewModel @Inject constructor(
                 timeInterval = formInputs.timeInterval ?: entryModel.period,
                 algorithm = formInputs.algorithm ?: entryModel.algorithm,
                 type = formInputs.type ?: entryModel.type,
+                isYubiKeyBacked = false,
+                isHardwareBacked = entryModel.credentialBackend is EntryCredentialBackend.YubiKeyOath,
                 position = entryModel.position,
                 showAdvanceOptions = showAdvanceOptions == true,
                 isValidSecret = isValidSecret,
@@ -186,8 +199,15 @@ internal class HomeManualViewModel @Inject constructor(
 
     internal fun onTypeChange(newType: EntryType) {
         typeFlow.update { newType }
+        if (newType != EntryType.TOTP) {
+            isYubiKeyBackedFlow.update { false }
+        }
 
         showAdvanceOptionsFlow.update { true }
+    }
+
+    internal fun onYubiKeyBackedChange(isEnabled: Boolean) {
+        isYubiKeyBackedFlow.update { isEnabled }
     }
 
     internal fun onShowAdvanceOptions() {
@@ -200,6 +220,10 @@ internal class HomeManualViewModel @Inject constructor(
         } else {
             updateEntry(entryId, formModel)
         }
+    }
+
+    internal fun onMigrateToYubiKey(formModel: HomeManualFormModel) {
+        entryId?.also { id -> migrateToYubiKey(id, formModel) }
     }
 
     private fun createEntry(formModel: HomeManualFormModel) {
@@ -244,6 +268,37 @@ internal class HomeManualViewModel @Inject constructor(
                             UpdateEntryReason.Unknown -> {
                                 dispatchSnackbarEvent(
                                     messageResId = R.string.home_manual_snackbar_message_update_error
+                                )
+                            }
+
+                            UpdateEntryReason.InvalidEntrySecret -> {
+                                isValidSecretFlow.update { false }
+                            }
+
+                            UpdateEntryReason.InvalidEntryTitle -> {
+                                isValidTitleFlow.update { false }
+                            }
+                        }
+                    }
+
+                    is Answer.Success -> {
+                        eventFlow.update { HomeManualEvent.OnEntryUpdated }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun migrateToYubiKey(entryId: String, formModel: HomeManualFormModel) {
+        viewModelScope.launch {
+            updateEntryUseCase.migrateToYubiKey(entryId = entryId, formModel = formModel).also { answer ->
+                when (answer) {
+                    is Answer.Failure -> {
+                        when (answer.reason) {
+                            UpdateEntryReason.EntryNotFound,
+                            UpdateEntryReason.Unknown -> {
+                                dispatchSnackbarEvent(
+                                    messageResId = R.string.home_manual_snackbar_message_migrate_yubikey_error
                                 )
                             }
 

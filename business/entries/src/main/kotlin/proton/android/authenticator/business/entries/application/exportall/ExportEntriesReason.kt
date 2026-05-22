@@ -21,5 +21,11 @@ package proton.android.authenticator.business.entries.application.exportall
 import proton.android.authenticator.shared.common.domain.answers.AnswerReason
 
 enum class ExportEntriesReason : AnswerReason {
+    PasswordRequired,
+    HardwareBackedEntries,
     InvalidEntries
 }
+
+internal class ExportPasswordRequiredError : Exception()
+
+internal class ExportHardwareBackedEntriesError : Exception()

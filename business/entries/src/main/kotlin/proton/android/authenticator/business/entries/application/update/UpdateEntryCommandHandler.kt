@@ -19,6 +19,7 @@
 package proton.android.authenticator.business.entries.application.update
 
 import proton.android.authenticator.business.shared.domain.errors.ErrorLoggingUtils
+import proton.android.authenticator.business.entries.application.create.YubiKeyOathEnrollmentLockedError
 import proton.android.authenticator.commonrust.AuthenticatorException
 import proton.android.authenticator.commonrust.AuthenticatorMobileClientInterface
 import proton.android.authenticator.shared.common.domain.answers.Answer
@@ -32,18 +33,30 @@ internal class UpdateEntryCommandHandler @Inject constructor(
 ) : CommandHandler<UpdateEntryCommand, Unit, UpdateEntryReason> {
 
     override suspend fun handle(command: UpdateEntryCommand): Answer<Unit, UpdateEntryReason> = try {
-        command.toModel(authenticatorClient)
-            .let { model ->
-                updater.update(
-                    id = command.id,
-                    position = command.position,
-                    model = model
-                )
+        when (command) {
+            is UpdateEntryCommand.ToYubiKeyTotp -> updater.migrateToYubiKeyTotp(command)
+            else -> {
+                command.toModel(authenticatorClient)
+                    .let { model ->
+                        updater.update(
+                            id = command.id,
+                            position = command.position,
+                            model = model
+                        )
+                    }
             }
+        }
             .also {
                 AuthenticatorLogger.i(TAG, "Successfully updated entry with id: ${command.id}")
             }
             .let(Answer<Unit, UpdateEntryReason>::Success)
+    } catch (e: YubiKeyOathEnrollmentLockedError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not migrate entry because YubiKey OATH is locked",
+            reason = UpdateEntryReason.Unknown,
+            tag = TAG
+        )
     } catch (e: AuthenticatorException.InvalidName) {
         ErrorLoggingUtils.logAndReturnFailure(
             throwable = e,

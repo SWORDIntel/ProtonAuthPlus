@@ -48,4 +48,20 @@ internal object AuthenticatorDatabaseMigrations {
             db.execSQL("UPDATE SessionEntity SET product = 'Authenticator' WHERE product = 'Pass'")
         }
     }
+
+    internal val Migration_6_7 = object : Migration(startVersion = 6, endVersion = 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE EntryEntity ADD COLUMN credential_backend_type TEXT NOT NULL DEFAULT 'local_encrypted'"
+            )
+            db.execSQL("ALTER TABLE EntryEntity ADD COLUMN hardware_credential_id TEXT")
+            db.execSQL("ALTER TABLE EntryEntity ADD COLUMN hardware_device_id TEXT")
+            db.execSQL("ALTER TABLE EntryEntity ADD COLUMN hardware_name TEXT")
+            db.execSQL("ALTER TABLE EntryEntity ADD COLUMN hardware_issuer TEXT")
+            db.execSQL("ALTER TABLE EntryEntity ADD COLUMN hardware_note TEXT")
+            db.execSQL("ALTER TABLE EntryEntity ADD COLUMN hardware_period INTEGER")
+            db.execSQL("ALTER TABLE EntryEntity ADD COLUMN hardware_algorithm INTEGER")
+            db.execSQL("ALTER TABLE EntryEntity ADD COLUMN hardware_digits INTEGER")
+        }
+    }
 }

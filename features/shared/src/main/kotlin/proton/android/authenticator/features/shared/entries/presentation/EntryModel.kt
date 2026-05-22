@@ -19,6 +19,7 @@
 package proton.android.authenticator.features.shared.entries.presentation
 
 import proton.android.authenticator.business.entries.domain.EntryAlgorithm
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.business.entries.domain.EntryType
 
 data class EntryModel(
@@ -37,5 +38,6 @@ data class EntryModel(
     val createdAt: Long,
     val modifiedAt: Long,
     val isDeleted: Boolean,
-    val isSynced: Boolean
+    val isSynced: Boolean,
+    val credentialBackend: EntryCredentialBackend = EntryCredentialBackend.LocalEncrypted
 )

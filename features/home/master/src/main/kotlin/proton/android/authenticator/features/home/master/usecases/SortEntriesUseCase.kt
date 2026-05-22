@@ -20,7 +20,6 @@ package proton.android.authenticator.features.home.master.usecases
 
 import proton.android.authenticator.business.entries.application.sortall.SortEntriesCommand
 import proton.android.authenticator.business.entries.application.sortall.SortEntriesReason
-import proton.android.authenticator.features.shared.entries.presentation.EntryModel
 import proton.android.authenticator.shared.common.domain.answers.Answer
 import proton.android.authenticator.shared.common.domain.infrastructure.commands.CommandBus
 import javax.inject.Inject
@@ -28,21 +27,14 @@ import javax.inject.Inject
 internal class SortEntriesUseCase @Inject constructor(private val commandBus: CommandBus) {
 
     internal suspend operator fun invoke(
-        entryModels: List<EntryModel>,
+        entryPositions: Map<String, Int>,
         newSortingMap: Map<String, Int>
-    ): Answer<Unit, SortEntriesReason> = entryModels
-        .filter { entryModel ->
-            newSortingMap[entryModel.id] != entryModel.position
+    ): Answer<Unit, SortEntriesReason> = entryPositions
+        .mapValues { (entryId, currentPosition) ->
+            newSortingMap[entryId] ?: currentPosition
         }
-        .map { entryModel ->
-            newSortingMap[entryModel.id]
-                ?.let { newPosition ->
-                    entryModel.copy(position = newPosition)
-                }
-                ?: entryModel
-        }
-        .associate { entryModel ->
-            entryModel.id to entryModel.position
+        .filter { (entryId, newPosition) ->
+            entryPositions[entryId] != newPosition
         }
         .let(::SortEntriesCommand)
         .let { command -> commandBus.dispatch(command = command) }

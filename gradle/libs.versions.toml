@@ -43,6 +43,7 @@ sentryVersion = "3.5.0"
 startupVersion = "1.2.0"
 timberVersion = "5.0.1"
 workVersion = "2.10.1"
+yubikitVersion = "3.0.1"
 zxingVersion = "3.5.3"
 
 [libraries]
@@ -147,6 +148,8 @@ timber = { module = "com.jakewharton.timber:timber", version.ref = "timberVersio
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxingVersion" }
 play-review = { module = "com.google.android.play:review", version.ref = "playReviewVersion" }
 play-review-ktx = { module = "com.google.android.play:review-ktx", version.ref = "playReviewVersion" }
+yubikit-android = { module = "com.yubico.yubikit:android", version.ref = "yubikitVersion" }
+yubikit-oath = { module = "com.yubico.yubikit:oath", version.ref = "yubikitVersion" }
 
 [bundles]
 android-application-implementation = [

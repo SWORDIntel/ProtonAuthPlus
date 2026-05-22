@@ -19,8 +19,10 @@
 package proton.android.authenticator.business.entries.application.update
 
 import kotlinx.coroutines.flow.first
+import proton.android.authenticator.business.entries.application.create.YubiKeyOathCredentialWriter
 import proton.android.authenticator.business.entries.domain.EntriesRepository
 import proton.android.authenticator.business.entries.domain.Entry
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.AuthenticatorEntryModel
 import proton.android.authenticator.commonrust.AuthenticatorMobileClientInterface
 import proton.android.authenticator.shared.common.domain.providers.TimeProvider
@@ -31,6 +33,7 @@ import javax.inject.Inject
 internal class EntryUpdater @Inject constructor(
     private val authenticatorClient: AuthenticatorMobileClientInterface,
     private val encryptionContextProvider: EncryptionContextProvider,
+    private val yubiKeyOathCredentialWriter: YubiKeyOathCredentialWriter,
     private val repository: EntriesRepository,
     private val timeProvider: TimeProvider
 ) {
@@ -55,6 +58,40 @@ internal class EntryUpdater @Inject constructor(
                     isDeleted = false,
                     isSynced = false,
                     position = position
+                )
+            }
+            .also { updatedEntry ->
+                repository.save(updatedEntry)
+            }
+    }
+
+    internal suspend fun migrateToYubiKeyTotp(command: UpdateEntryCommand.ToYubiKeyTotp) {
+        val existingEntry = repository.find(id = command.id).first()
+        require(existingEntry.credentialBackend == EntryCredentialBackend.LocalEncrypted) {
+            "Only local encrypted entries can be migrated to YubiKey"
+        }
+
+        val writeResult = yubiKeyOathCredentialWriter.write(command.toCreateCommand())
+
+        encryptionContextProvider.withEncryptionContext {
+            encrypt(ByteArray(size = 0), EncryptionTag.EntryContent)
+        }
+            .let { encryptedContent ->
+                existingEntry.copy(
+                    content = encryptedContent,
+                    modifiedAt = timeProvider.currentSeconds(),
+                    isSynced = false,
+                    position = command.position,
+                    credentialBackend = EntryCredentialBackend.YubiKeyOath(
+                        credentialId = writeResult.credentialId,
+                        deviceId = writeResult.deviceId,
+                        name = command.name,
+                        issuer = command.issuer,
+                        note = command.note,
+                        period = command.period,
+                        algorithm = command.algorithm,
+                        digits = command.digits
+                    )
                 )
             }
             .also { updatedEntry ->

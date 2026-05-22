@@ -84,4 +84,32 @@ sealed class UpdateEntryCommand : Command {
 
     }
 
+    data class ToYubiKeyTotp(
+        override val id: String,
+        override val name: String,
+        override val secret: String,
+        override val note: String? = null,
+        override val position: Int,
+        internal val issuer: String,
+        internal val period: Int,
+        internal val digits: Int,
+        internal val algorithm: EntryAlgorithm
+    ) : UpdateEntryCommand() {
+
+        internal fun toCreateCommand() = proton.android.authenticator.business.entries.application.create
+            .CreateEntryCommand.FromYubiKeyTotp(
+                name = name,
+                secret = secret,
+                issuer = issuer,
+                period = period,
+                digits = digits,
+                algorithm = algorithm,
+                note = note
+            )
+
+        override fun toModel(authenticatorClient: AuthenticatorMobileClientInterface): AuthenticatorEntryModel =
+            error("YubiKey migration must be handled through EntryUpdater.migrateToYubiKeyTotp")
+
+    }
+
 }

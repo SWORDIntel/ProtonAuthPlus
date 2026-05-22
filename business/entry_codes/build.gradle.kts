@@ -14,4 +14,6 @@ androidComponents {
 
 dependencies {
     implementation(libs.kotlinx.datetime)
+    implementation(libs.yubikit.android)
+    implementation(libs.yubikit.oath)
 }

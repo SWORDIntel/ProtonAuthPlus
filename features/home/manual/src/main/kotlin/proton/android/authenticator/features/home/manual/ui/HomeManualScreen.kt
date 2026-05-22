@@ -92,6 +92,8 @@ fun HomeManualScreen(
                     onTimeIntervalChange = ::onTimeIntervalChange,
                     onAlgorithmChange = ::onAlgorithmChange,
                     onTypeChange = ::onTypeChange,
+                    onYubiKeyBackedChange = ::onYubiKeyBackedChange,
+                    onMigrateToYubiKey = ::onMigrateToYubiKey,
                     onShowAdvanceOptions = ::onShowAdvanceOptions
                 )
             }

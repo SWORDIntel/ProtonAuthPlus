@@ -77,8 +77,10 @@ fun HomeScanScreen(
                             end = ThemePadding.Medium,
                             bottom = ThemePadding.Large
                         ),
+                    isYubiKeyBacked = state.isYubiKeyBacked,
                     onCloseClick = onCloseClick,
                     onEnterManuallyClick = onManualEntryClick,
+                    onYubiKeyBackedClick = ::onYubiKeyBackedClick,
                     onOpenGalleryClick = {
                         try {
                             launcher.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))

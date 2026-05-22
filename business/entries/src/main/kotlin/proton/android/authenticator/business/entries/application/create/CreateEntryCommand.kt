@@ -19,6 +19,7 @@
 package proton.android.authenticator.business.entries.application.create
 
 import proton.android.authenticator.business.entries.domain.EntryAlgorithm
+import proton.android.authenticator.business.entries.domain.EntryType
 import proton.android.authenticator.AuthenticatorEntryModel
 import proton.android.authenticator.AuthenticatorEntrySteamCreateParameters
 import proton.android.authenticator.AuthenticatorEntryTotpCreateParameters
@@ -70,10 +71,49 @@ sealed class CreateEntryCommand : Command {
 
     }
 
+    data class FromYubiKeyTotp(
+        internal val name: String,
+        internal val secret: String,
+        internal val issuer: String,
+        internal val period: Int,
+        internal val digits: Int,
+        internal val algorithm: EntryAlgorithm,
+        internal val note: String? = null
+    ) : CreateEntryCommand() {
+
+        override fun toModel(authenticatorClient: AuthenticatorMobileClientInterface): AuthenticatorEntryModel =
+            error("YubiKey-backed entries must be enrolled through EntryCreator.createYubiKeyTotp")
+
+    }
+
     data class FromUri(internal val uri: String) : CreateEntryCommand() {
 
         override fun toModel(authenticatorClient: AuthenticatorMobileClientInterface): AuthenticatorEntryModel =
             authenticatorClient.entryFromUri(uri = uri)
+
+    }
+
+    data class FromYubiKeyUri(internal val uri: String) : CreateEntryCommand() {
+
+        internal fun toYubiKeyTotpCommand(authenticatorClient: AuthenticatorMobileClientInterface): FromYubiKeyTotp =
+            authenticatorClient.entryFromUri(uri = uri).let { model ->
+                val entryType = EntryType.from(model.entryType.ordinal)
+                require(entryType == EntryType.TOTP) { "YubiKey-backed URI creation only supports TOTP entries" }
+
+                val totpParams = authenticatorClient.getTotpParams(entry = model)
+                FromYubiKeyTotp(
+                    name = model.name,
+                    secret = model.secret,
+                    issuer = model.issuer,
+                    period = model.period.toInt(),
+                    digits = totpParams.digits.toInt(),
+                    algorithm = EntryAlgorithm.from(totpParams.algorithm.ordinal),
+                    note = model.note
+                )
+            }
+
+        override fun toModel(authenticatorClient: AuthenticatorMobileClientInterface): AuthenticatorEntryModel =
+            error("YubiKey-backed URI entries must be enrolled through EntryCreator.createYubiKeyTotp")
 
     }
 

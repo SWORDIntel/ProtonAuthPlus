@@ -43,9 +43,12 @@ internal class HomeScanViewModel @Inject constructor(
 
     private val eventFlow = MutableStateFlow<HomeScanEvent>(value = HomeScanEvent.Idle)
 
+    private val isYubiKeyBackedFlow = MutableStateFlow(value = false)
+
     internal val stateFlow: StateFlow<HomeScanState> = combine(
         hasCameraPermissionFlow,
         eventFlow,
+        isYubiKeyBackedFlow,
         ::HomeScanState
     ).stateIn(
         scope = viewModelScope,
@@ -61,9 +64,13 @@ internal class HomeScanViewModel @Inject constructor(
         hasCameraPermissionFlow.update { isGranted }
     }
 
+    internal fun onYubiKeyBackedClick() {
+        isYubiKeyBackedFlow.update { isEnabled -> !isEnabled }
+    }
+
     internal fun onCreateEntry(uri: String) {
         viewModelScope.launch {
-            createEntryUseCase(uri = uri)
+            createEntryUseCase(uri = uri, isYubiKeyBacked = isYubiKeyBackedFlow.value)
                 .fold(
                     onFailure = { HomeScanEvent.OnEntryCreationFailed },
                     onSuccess = { HomeScanEvent.OnEntryCreationSucceeded }

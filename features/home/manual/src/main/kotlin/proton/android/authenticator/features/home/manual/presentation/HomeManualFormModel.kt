@@ -29,6 +29,8 @@ internal data class HomeManualFormModel(
     internal val timeInterval: Int,
     internal val algorithm: EntryAlgorithm,
     internal val type: EntryType,
+    internal val isYubiKeyBacked: Boolean,
+    internal val isHardwareBacked: Boolean,
     internal val showAdvanceOptions: Boolean,
     internal val position: Int,
     internal val mode: HomeManualMode,
@@ -72,6 +74,10 @@ internal data class HomeManualFormModel(
         .map { type -> type.name }
 
     internal val selectedTypeIndex: Int = type.value
+
+    internal val canUseYubiKeyBackend: Boolean = mode == HomeManualMode.Create && type == EntryType.TOTP
+
+    internal val canMigrateToYubiKey: Boolean = mode == HomeManualMode.Edit && type == EntryType.TOTP && !isHardwareBacked
 
     internal val isValid: Boolean =
         secret.isNotBlank() && isValidSecret && title.isNotBlank() && isValidTitle

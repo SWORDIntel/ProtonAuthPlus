@@ -21,6 +21,7 @@ package proton.android.authenticator.business.entries.application.create
 import proton.android.authenticator.business.entries.application.shared.constants.EntryConstants
 import proton.android.authenticator.business.entries.domain.EntriesRepository
 import proton.android.authenticator.business.entries.domain.Entry
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.AuthenticatorEntryModel
 import proton.android.authenticator.commonrust.AuthenticatorMobileClientInterface
 import proton.android.authenticator.shared.common.domain.providers.TimeProvider
@@ -31,6 +32,7 @@ import javax.inject.Inject
 internal class EntryCreator @Inject constructor(
     private val authenticatorClient: AuthenticatorMobileClientInterface,
     private val encryptionContextProvider: EncryptionContextProvider,
+    private val yubiKeyOathCredentialWriter: YubiKeyOathCredentialWriter,
     private val timeProvider: TimeProvider,
     private val repository: EntriesRepository
 ) {
@@ -53,6 +55,40 @@ internal class EntryCreator @Inject constructor(
                     isSynced = false,
                     position = repository.searchMaxPosition()
                         .plus(EntryConstants.POSITION_INCREMENT)
+                )
+            }
+            .also { entry ->
+                repository.save(entry)
+            }
+    }
+
+    internal suspend fun createYubiKeyTotp(command: CreateEntryCommand.FromYubiKeyTotp) {
+        val writeResult = yubiKeyOathCredentialWriter.write(command)
+
+        encryptionContextProvider.withEncryptionContext {
+            encrypt(ByteArray(size = 0), EncryptionTag.EntryContent)
+        }
+            .let { encryptedContent -> encryptedContent to timeProvider.currentSeconds() }
+            .let { (encryptedContent, currentSeconds) ->
+                Entry(
+                    id = java.util.UUID.randomUUID().toString(),
+                    content = encryptedContent,
+                    createdAt = currentSeconds,
+                    modifiedAt = currentSeconds,
+                    isDeleted = false,
+                    isSynced = false,
+                    position = repository.searchMaxPosition()
+                        .plus(EntryConstants.POSITION_INCREMENT),
+                    credentialBackend = EntryCredentialBackend.YubiKeyOath(
+                        credentialId = writeResult.credentialId,
+                        deviceId = writeResult.deviceId,
+                        name = command.name,
+                        issuer = command.issuer,
+                        note = command.note,
+                        period = command.period,
+                        algorithm = command.algorithm,
+                        digits = command.digits
+                    )
                 )
             }
             .also { entry ->

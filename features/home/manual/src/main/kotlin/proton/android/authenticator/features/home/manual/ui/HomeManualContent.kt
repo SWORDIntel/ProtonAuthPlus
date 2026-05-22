@@ -34,6 +34,8 @@ internal fun HomeManualContent(
     onTimeIntervalChange: (Int) -> Unit,
     onAlgorithmChange: (EntryAlgorithm) -> Unit,
     onTypeChange: (EntryType) -> Unit,
+    onYubiKeyBackedChange: (Boolean) -> Unit,
+    onMigrateToYubiKey: (HomeManualFormModel) -> Unit,
     onShowAdvanceOptions: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -49,6 +51,8 @@ internal fun HomeManualContent(
                 onTimeIntervalChange = onTimeIntervalChange,
                 onAlgorithmChange = onAlgorithmChange,
                 onTypeChange = onTypeChange,
+                onYubiKeyBackedChange = onYubiKeyBackedChange,
+                onMigrateToYubiKey = onMigrateToYubiKey,
                 onShowAdvanceOptions = onShowAdvanceOptions
             )
         }

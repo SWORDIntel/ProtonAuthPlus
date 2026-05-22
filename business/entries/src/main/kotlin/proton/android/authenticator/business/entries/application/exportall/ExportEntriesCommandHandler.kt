@@ -37,6 +37,20 @@ internal class ExportEntriesCommandHandler @Inject constructor(
                 AuthenticatorLogger.i(TAG, "Successfully exported $exportedEntriesCount entries")
             }
             .let(Answer<Int, ExportEntriesReason>::Success)
+    } catch (error: ExportPasswordRequiredError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            tag = TAG,
+            message = "Could not export entries because an encryption password is required",
+            throwable = error,
+            reason = ExportEntriesReason.PasswordRequired
+        )
+    } catch (error: ExportHardwareBackedEntriesError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            tag = TAG,
+            message = "Could not export entries because hardware-backed entries do not expose seeds",
+            throwable = error,
+            reason = ExportEntriesReason.HardwareBackedEntries
+        )
     } catch (error: AuthenticatorException) {
         ErrorLoggingUtils.logAndReturnFailure(
             tag = TAG,

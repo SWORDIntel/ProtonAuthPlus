@@ -24,6 +24,8 @@ enum class GenerateBackupReason : AnswerReason {
     CannotGenerate,
     NoEntries,
     NotEnabled,
+    PasswordRequired,
+    HardwareBackedEntries,
     MissingFileName,
     FileCreationFailed
 }
