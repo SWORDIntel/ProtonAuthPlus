@@ -104,10 +104,7 @@ If you want to build the app locally, please refer to the [BUILD.md](./docs/publ
 ## Develop
 
 If you want to contribute to the application, please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file.
-
-## Help us translate
-
-If you want to help us to translate the application, you can learn more about it on [our blog post](https://proton.me/blog/translation-community).
+Or considering this is a custom fork, just, you know, um, I don't know, make your own fork, break it, complain, pull an issue, complain some more. Just, you know, break things.
 
 ## License
 
