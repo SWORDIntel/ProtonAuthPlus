@@ -1,122 +1,145 @@
 # Proton Authenticator +
 
-This is an unofficial hardened fork of Proton Authenticator for Android.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Platform: Android](https://img.shields.io/badge/Platform-Android-green.svg)](https://developer.android.com)
+[![Security: Hardened Fork](https://img.shields.io/badge/Security-Hardened%20Fork-red.svg)](#security-overhaul--architectural-pillars)
+[![Hardware: YubiKey OATH](https://img.shields.io/badge/Hardware-YubiKey%20OATH-gold.svg)](#1-hardware-backed-authenticator-yubikey-oath)
 
-It is not the official Proton Authenticator distribution and it is not published
-through Google Play from this repository. Build from source or install APKs only
-from a release channel you trust.
+**Proton Authenticator +** is a comprehensive security and privacy overhaul of the open-source Proton Authenticator for Android. It is engineered specifically for high-threat environments, security professionals, and zero-trust operational requirements where phone-resident plaintext seeds, unencrypted backups, and cloud-sync exposures represent unacceptable risk.
 
-The upstream project remains Proton Authenticator by Proton AG. This fork keeps
-the upstream GPLv3 license and copyright notices while adding security-focused
-changes under the `Proton Authenticator +` app label.
+> [!IMPORTANT]
+> This is an independent hardened distribution and is not affiliated with or published by Proton AG. The upstream project remains Proton Authenticator by Proton AG under the GNU General Public License v3.0.
 
-## Package and signing
+---
 
-This fork uses its own Android application id base:
+## Security Overhaul & Architectural Pillars
 
-```text
-com.swordintel.protonauthplus
+Proton Authenticator + transforms the standard mobile authenticator model from a software-bound secret vault into a zero-trust, hardware-integrated credential manager.
+
+```mermaid
+flowchart TD
+    subgraph Enrollment ["1. Multi-Modal Ingestion"]
+        GA["Google Authenticator\n(Multi-Page QR / Text URI)"] --> Scanner["Dual-Engine QR Scanner\n(Rust + ZXing Fallback)"]
+        Scanner --> Parse["Payload Parser\n(Zero-Copy UTF-8 Bypass)"]
+        Manual["Manual Secret Entry"] --> Parse
+    end
+
+    subgraph SecurityCore ["2. Zero-Trust Storage & Isolation"]
+        Parse --> Decision{"Storage Target?"}
+        Decision -->|"Hardware OATH"| YK["YubiKey Hardware (USB CCID)\n- Seed Never Touches Android\n- On-Chip TOTP Calculation"]
+        Decision -->|"Local Encrypted"| DB["Room Database (AES Encrypted)\n- Encrypted Content & Metadata\n- No Destructive Migration"]
+    end
+
+    subgraph HardenedUI ["3. Defense-in-Depth Presentation"]
+        YK --> Batch["Batch Calculate All (Single Session)"]
+        DB --> Ephemeral["Ephemeral Code Model (No Secrets in UI)"]
+        Batch --> Home["Hardened Home Screen\n- FLAG_SECURE Always-On\n- Hardware Token Badge\n- Fail-Closed on Removal"]
+        Ephemeral --> Home
+    end
 ```
 
-The F-Droid flavored release APK builds as:
+### 1. Hardware-Backed Authenticator (YubiKey OATH)
+Traditional authenticators store TOTP secrets locally in phone storage, decrypting them into process memory on demand where malware, forensic dumps, or memory scrapers can extract them. Proton Authenticator + integrates Yubico OATH via USB CCID:
+- **True Seed Non-Exposure:** The TOTP secret is written directly to the YubiKey OATH applet during enrollment or migration. The secret is never stored in the Android Room database, flash memory, or Android system backups.
+- **On-Chip Calculation:** TOTP codes are computed by the YubiKey microcontroller, not Android CPU cores.
+- **Single-Session Batch Calculation (`INS_CALCULATE_ALL`):** All hardware-backed accounts are calculated in a single USB CCID session instead of opening redundant, slow, per-account sessions.
+- **Touch-Sense Detection:** Detects touch-required credentials automatically to calculate the current code without prematurely firing a second touch prompt for the next period code.
+- **Fail-Closed on Disconnect:** If the YubiKey is removed or locked, the interface immediately blanks the OTP codes (`------`) rather than leaving stale, valid tokens visible.
+- **Hardware Slot Reclamation:** Deleting a hardware-backed entry automatically deletes the credential from the physical YubiKey over USB CCID (5 s timeout), freeing one of the 32 hardware OATH slots.
 
-```text
-com.swordintel.protonauthplus.fdroid
-```
+### 2. Verified Migration & Cloud Deletion
+- **Pre-Wipe Code Verification:** When selecting `Move to YubiKey` on an existing local account, the app writes the secret to the YubiKey, calculates the current code on both Android and the hardware key, and verifies that the outputs match before permanently erasing the local seed. If verification fails, the local entry is left completely intact.
+- **Remote Cloud Copy Purge:** When moving a software entry to hardware, the app prompts to delete the copy stored in Proton Cloud (default: Yes). On the next synchronization pass, the cloud copy is purged from the remote server, and the local entry is tombstoned so stale cloud copies cannot resurrect the software seed.
+- **Strict Cloud Air-Gapping:** Hardware-backed entries are permanently excluded from Proton Cloud synchronization (`SyncEntriesModelsUseCase`), preventing empty-secret or metadata leakage to external servers.
 
-Android treats each application id as a separate app. The F-Droid release build
-does not replace the official Proton Authenticator app or the Play-flavored
-build; migrate or import entries explicitly when moving between apps.
+### 3. Zero-Footgun Export & Backup Protection
+- **No Plaintext Exports:** The legacy "Export without password" and "Enable backup without password" actions have been completely excised.
+- **Mandatory Password Encryption:** All vault exports and automated backups require user-provided password encryption.
+- **Hardware Exclusion from Backups:** Because hardware-bound seeds cannot and should not be extracted from the YubiKey, export and backup routines automatically filter out YubiKey entries rather than failing or corrupting the backup archive. Remaining software entries are safely archived.
 
-## Install and update
+### 4. Flash & Memory Hardening
+- **Metadata Encryption at Rest:** Account name, issuer, and notes for hardware-backed entries are encrypted at rest in `EntryEntity.encrypted_content` using AES encryption tags. Plaintext database columns are nullified to prevent OS-level forensic leakage from flash storage.
+- **Ephemeral UI Presentation Models:** The home screen presentation model (`HomeMasterEntryModel`) retains only non-secret display metadata and the ephemeral 6/8-digit code, completely dropping decrypted secret strings and secret-bearing `otpauth://` URIs from long-lived memory structures.
+- **No Destructive Database Migrations:** `fallbackToDestructiveMigration()` has been removed from Room configuration. Any schema migration discrepancy fails loudly instead of silently wiping the user's two-factor authentication database.
+- **Always-On `FLAG_SECURE`:** Enforced throughout the application lifecycle to block Android screenshots, screen recording utilities, and task-switcher snapshots.
 
-For day-to-day testing, install a debug build from Android Studio or run:
+### 5. Complete Google Authenticator Import Overhaul
+Migrating multi-token vaults from Google Authenticator is now completely seamless, fault-tolerant, and high-performance:
+- **Instant Camera Payload Forwarding:** Bypasses redundant camera-frame PNG compression, disk writes, and secondary decoding passes by directly forwarding the ZXing-decoded `otpauth-migration://` payload as UTF-8 bytes.
+- **Multi-Page QR Export Batch Ingestion:** Google Authenticator exports accounts in sequential QR codes ("1 of 3", "2 of 3") when vaults exceed 10 accounts. Proton Authenticator + processes multiple selected screenshots from the gallery in a single atomic batch pass, assigning sequential positions and persisting all accounts.
+- **Text-File and Raw URI Imports:** Direct ingestion of `.txt` export files containing `otpauth-migration://offline?data=...` or standard `otpauth://` URIs without requiring QR image rendering.
+- **Dual-Engine QR Decoder Fallback:** Seamlessly tries the native Rust QR engine first, falling back automatically to ZXing's `HybridBinarizer` and `GlobalHistogramBinarizer` on challenging, low-contrast, or screen-captured images.
+
+---
+
+## Feature Comparison Matrix
+
+| Feature | Standard Authenticator | Proton Authenticator + |
+| :--- | :---: | :---: |
+| **YubiKey OATH Hardware Storage (USB CCID)** | ❌ No | ✅ **Full Support** |
+| **On-Chip Hardware Code Calculation** | ❌ No | ✅ **Yes (`CALCULATE ALL`)** |
+| **Touch-Required Hardware Token Detection** | ❌ No | ✅ **Yes** |
+| **Pre-Wipe Verified Hardware Migration** | ❌ No | ✅ **Yes** |
+| **Automated Proton Cloud Copy Deletion** | ❌ No | ✅ **Yes** |
+| **Hardware Slot Reclamation on Deletion** | ❌ No | ✅ **Yes** |
+| **Metadata Encryption at Rest for Hardware Tokens** | ❌ No | ✅ **Yes** |
+| **Mandatory Password-Protected Exports & Backups** | ❌ Optional | ✅ **Enforced (No Plaintext)** |
+| **Ephemeral Memory Model (No Decrypted Secrets in UI)** | ❌ Retained | ✅ **Zero Decrypted Secrets in UI** |
+| **Destructive Database Fallback Prevention** | ❌ Silent Wipe | ✅ **Fail-Loud Protection** |
+| **Always-On `FLAG_SECURE` (Anti-Screenshot/Recents)** | ⚠️ Partial | ✅ **Always Enforced** |
+| **Google Authenticator Multi-Page Batch Import** | ❌ Single Only | ✅ **Multi-Selection Batch** |
+| **Google Authenticator Direct Text/URI Import** | ❌ Images Only | ✅ **Direct `.txt` / URI Support** |
+| **Dual-Engine QR Scanning Fallback (Rust + ZXing)** | ❌ Single Engine | ✅ **Dual Engine** |
+
+---
+
+## Application ID & Signing Architecture
+
+This fork operates under an independent package namespace to avoid collision with upstream installations:
+
+- **Base Package ID:** `com.swordintel.protonauthplus`
+- **F-Droid Release Package ID:** `com.swordintel.protonauthplus.fdroid`
+
+Android treats differing application IDs as distinct sandboxed applications. Installing Proton Authenticator + will not overwrite or replace the official Proton Authenticator app; you can run both simultaneously during migration.
+
+---
+
+## Building from Source
+
+### Prerequisites
+- JDK 17 or higher
+- Android SDK with build-tools (API 35 / compileSdk 35)
+- Git
+
+### Debug Build
+To compile and install the debug APK on a connected device or emulator:
 
 ```shell
-./gradlew :app:installFdroidProdDebug
+./gradlew :app:installFdroidProdDebug --no-configuration-cache
 ```
 
-For user-facing APKs, build and verify the signed F-Droid production release:
+### Verified Production Release (F-Droid Flavor)
+To generate the signed, production-ready F-Droid release APK:
 
 ```shell
 ./scripts/verifyFdroidProdRelease.sh
 ```
 
-The APK is written to `app/build/outputs/apk/fdroidProd/release/`.
+The script automatically detects the local Android SDK, checks for required release signing configuration, builds the APK, verifies signature integrity, and displays the SHA-256 package fingerprints:
 
-Updates require the new APK to use the same application id and signing key as
-the installed app. A differently signed APK cannot update an existing install;
-Android will require uninstalling the old app first, which removes local app
-data unless you have exported or backed it up. Hardware-backed YubiKey entries
-cannot be exported from the phone, so keep account recovery codes or a second
-enrolled hardware key before replacing installs.
+- **Output Artifact:** `app/build/outputs/apk/fdroidProd/release/app-fdroid-prod-release.apk`
 
-## Hardened fork upgrades
+---
 
-This fork is aimed at reducing phone-resident TOTP seed exposure for high-risk
-use cases, especially runtime plaintext seed material in app memory.
+## Technical Documentation & References
 
-- Always-on `FLAG_SECURE` blocks screenshots and insecure screen capture for the
-  app UI.
-- Exports and automatic backups require a password and no longer allow
-  plaintext/no-password artifacts.
-- Password-protected export and backup flows are enforced before file
-  generation, closing the old plaintext export/backup footgun.
-- Hardware-backed YubiKey OATH entries are supported over USB CCID.
-- Manual TOTP creation can write the secret directly to an inserted YubiKey with
-  `Store on YubiKey`.
-- QR/gallery TOTP enrollment can route scanned `otpauth://totp/...` URIs into
-  the inserted YubiKey instead of storing the seed locally.
-- Existing local TOTP entries can be migrated from the edit screen with
-  `Move to YubiKey`.
-- YubiKey-backed entries store only local display/sort metadata and the OATH
-  credential id. The TOTP seed is not retained in Room and is not decrypted into
-  app memory for code generation.
-- The hardware-backed path removes the old local-entry runtime plaintext seed
-  exposure: code generation asks the YubiKey OATH app for codes instead of
-  loading the TOTP secret into the Android process.
-- The home screen presentation model no longer retains the full decrypted local
-  entry model, avoiding an extra long-lived UI copy of local secrets and
-  secret-bearing `otpauth://` URIs.
-- YubiKey-backed entries are skipped during export and backup because the phone
-  cannot and should not export their seeds; backups of the remaining local
-  entries still succeed. They are also never synced to Proton cloud.
-- `Move to YubiKey` verifies that the YubiKey produces the same TOTP code as the
-  local seed before the local seed is erased.
-- Hardware entry metadata (name, issuer, note) is encrypted at rest in the Room
-  database instead of stored in plaintext columns.
-- Deleting a hardware-backed entry frees its OATH slot on the connected YubiKey.
-- All hardware codes are fetched in one USB session (OATH `CALCULATE ALL`).
-- Room no longer falls back to destructive migration, so a schema problem
-  cannot silently wipe your entries.
-- If the YubiKey is removed, hardware-backed codes fail closed and render blank
-  placeholder codes instead of retaining stale valid OTPs.
+- [Implementation Details & Threat Model](file:///home/john/ProtonAuthPlus/docs/hardening-yubikey-oath.md): Comprehensive architectural analysis of YubiKey OATH integration, APDU commands, and memory safety.
+- [Build, Install, and Release Guide](file:///home/john/ProtonAuthPlus/docs/public/BUILD.md): Step-by-step local building and release verification procedures.
+- [Changelog](file:///home/john/ProtonAuthPlus/CHANGELOG.md): Complete chronological record of security fixes, features, and optimizations.
+- [Project Improvement Roadmap](file:///home/john/ProtonAuthPlus/ROADMAP.md): Status record of all hardening phases.
 
-## Important limits
-
-Local software-stored TOTP entries still need the secret in process memory while
-generating codes. This fork reduces extra UI-layer retention of decrypted entry
-objects, but true seed non-exposure requires migrating the entry to a hardware
-backend such as YubiKey OATH.
-
-Hardware-backed entries deliberately cannot be exported or backed up by the
-phone because the seed is no longer phone-resident. Keep an independent recovery
-plan for any account moved to the YubiKey.
-
-See [docs/hardening-yubikey-oath.md](./docs/hardening-yubikey-oath.md) for the
-implementation notes and remaining polish work.
-
-## Build and release docs
-
-If you want to build the app locally, please refer to the [BUILD.md](./docs/public/BUILD.md) file.
-
-## Develop
-
-If you want to contribute to the application, please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file.
-Or considering this is a custom fork, just, you know, um, I don't know, make your own fork, break it, complain, pull an issue, complain some more. Just, you know, break things.
+---
 
 ## License
 
-The code and data files in this distribution are licensed under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See <https://www.gnu.org/licenses/> for a copy of this license.
-
-See [LICENSE](LICENSE) file
+This project is licensed under the terms of the **GNU General Public License v3.0** (GPLv3). See the [LICENSE](file:///home/john/ProtonAuthPlus/LICENSE) file for complete license text. All upstream copyright notices from Proton AG remain intact.

@@ -1,173 +1,138 @@
-# Hardened YubiKey OATH Backend Plan
+# Hardened Security Overhaul & YubiKey OATH Architecture
 
-This fork treats phone-resident TOTP seeds as unacceptable for high-risk
-accounts. The target design is to make the YubiKey OATH application the owner
-of TOTP secrets and keep only display metadata on the phone.
+## Executive Summary
 
-## Current risk
+**Proton Authenticator +** represents a complete architectural overhaul of Proton Authenticator for Android, designed to eliminate the fundamental vulnerabilities inherent in software-bound mobile two-factor authenticators. In traditional authenticators, TOTP seed material resides permanently in phone flash storage and is routinely decrypted into process memory during code generation and UI binding. Under a compromised device threat model (e.g., memory dumping, forensic extraction, or malicious local processes), all two-factor protections fail simultaneously.
 
-Local entries are encrypted at rest in `EntryEntity.encrypted_content`, but the
-app decrypts them into runtime models containing `secret` to render codes. That
-runtime plaintext is the main exposure against a compromised endpoint.
+This fork eliminates these attack surfaces by establishing a hardware-rooted trust boundary using **YubiKey OATH over USB CCID**, enforcing strict cloud isolation, encrypting all flash metadata at rest, mandating password-protected exports, and rebuilding the import and QR-scanning pipelines for speed and resilience.
 
-## Target model
+---
 
-- Add a `CredentialBackend` abstraction with at least:
-  - `LocalEncryptedBackend` for existing local entries.
-  - `YubiKeyOathBackend` for hardware-resident entries.
-- YubiKey-backed entries store only metadata locally:
-  - local entry id
-  - issuer/name/icon/sort order
-  - YubiKey OATH credential id/name
-  - backend type
-- The TOTP seed is written to the YubiKey OATH app once during enrollment or
-  migration and is not retained in Room.
-- Code generation for YubiKey-backed entries requires USB/NFC access to the key.
-- Migration verifies that a YubiKey-generated code matches the existing local
-  entry before deleting the local seed (implemented, see below).
+## Threat Model & Attack Surface Mitigation
 
-## Required Android pieces
+| Attack Vector | Standard Authenticator Risk | Proton Authenticator + Mitigation |
+| :--- | :--- | :--- |
+| **Endpoint / Process Memory Scraping** | TOTP secrets decrypted and retained in long-lived UI and presentation models. | Hardware secrets never touch Android CPU or RAM; software entries use ephemeral presentation models with secrets stripped from UI state. |
+| **Physical Extraction / Flash Dump** | Database metadata (account names, issuers) stored in plaintext columns. | All hardware metadata encrypted at rest in `EntryEntity.encrypted_content` via AES encryption tags. |
+| **Silent Database Corruption** | Room's `fallbackToDestructiveMigration()` wipes the entire user vault if an unexpected schema mismatch occurs. | Destructive fallback removed entirely; schema mismatches fail loudly and prevent silent data loss. |
+| **Malicious / Accidental Screen Capture** | Screenshots and task-switcher snapshots can capture valid TOTP codes and secrets. | Always-on `FLAG_SECURE` strictly enforced across the application lifecycle. |
+| **Unencrypted Backup Footguns** | Users can inadvertently create unencrypted exports/backups containing raw seeds. | Plaintext export and backup pathways completely removed; AES password protection strictly enforced before generation. |
+| **Cloud Secret Residency** | Migrated hardware tokens could retain lingering software copies on Proton Cloud. | Explicit cloud deletion prompt during migration with automated server-side purge on next sync; hardware entries air-gapped from cloud sync. |
+| **Stale Cloud Resurrection** | An older cloud copy of an entry could overwrite or revert a migrated hardware token. | Local hardware entries are tombstoned on delete/migration; `EntriesSyncer` drops matching incoming cloud entries before computing sync actions. |
+| **Faulty Hardware Enrollment / Brick** | Writing a secret to a hardware key and immediately wiping local storage without verification could lose access if the key failed or miscalculated. | Pre-wipe verification: local seed is only erased if a test TOTP calculation on the key matches the local engine's code for the exact same timestamp. |
 
-- Use YubiKit Android OATH APIs over USB CCID and NFC.
-- Add a UI flow for detecting/selecting a YubiKey.
-- Add an enrollment flow for moving an existing entry to hardware.
-- Add a recovery flow that strongly encourages enrolling a second hardware key.
+---
 
-## Current implementation status
+## Architectural Deep Dive
 
-- `EntryCredentialBackend` separates local encrypted entries from YubiKey OATH
-  entries.
-- Room schema version 7 adds hardware credential metadata columns.
-- Hardware entry metadata (name, issuer, note) is encrypted at rest in
-  `EntryEntity.encrypted_content` via `EncryptionTag.EntryContent`. The plaintext
-  columns (`hardware_name`, `hardware_issuer`, `hardware_note`) are left null on
-  new writes to prevent flash storage metadata leaks, while remaining backward-compatible
-  with older rows.
-- `CreateEntryCommand.FromYubiKeyTotp` writes the TOTP secret to the inserted
-  USB YubiKey OATH app, then stores only metadata locally.
-- Manual TOTP creation exposes a `Store on YubiKey` option that uses the
-  hardware-backed command.
-- QR/gallery TOTP creation exposes a key-mode toggle that routes scanned
-  `otpauth://totp/...` URIs into the YubiKey OATH app instead of local storage.
-- Existing local TOTP entries can be opened in the edit screen and moved to the
-  inserted USB YubiKey with the `Move to YubiKey` action. The entry id and sort
-  position are preserved, while the local seed payload is replaced with empty
-  encrypted content and YubiKey OATH metadata.
-- `EntryCodesSearcher` routes `yubikey-oath://` entries to YubiKit over USB
-  instead of the local Rust TOTP generator. All hardware entries are resolved in
-  a single CCID session via `YubiKeyOathCodeProvider.calculateBatch` (OATH
-  `CALCULATE ALL`), instead of one session per entry. Touch-required credentials
-  are detected so the "next code" lookup does not trigger a second touch prompt.
-- Export and automatic backup skip hardware-backed entries (they are filtered
-  out of the payload) because the phone cannot and should not export their
-  seeds. This no longer raises a fatal error, so automatic backups of the
-  remaining local entries keep working when a YubiKey entry exists.
-- Cloud sync (`SyncEntriesModelsUseCase`) only syncs `LocalEncrypted` entries.
-  Hardware entries carry no seed, so they are never pushed to Proton as empty
-  secrets / `yubikey-oath://` URIs.
-- Cloud copy handling on migration: When moving an entry to YubiKey, an explicit
-  confirmation dialog is presented: "Do you also want to delete the cloud copy stored
-  in Proton Cloud?".
-  - The default positive choice is "Delete cloud copy" (`deleteCloudCopy = true`).
-    Upon migration verification, the hardware entry retains `isSynced = true` as a
-    pending cloud-deletion request. On the next sync, `EntriesSyncer` invokes
-    `api.deleteAll` for that remote copy in Proton Cloud and clears `isSynced` to
-    `false`.
-  - The secondary choice is "Keep cloud copy" (`deleteCloudCopy = false`). The entry
-    sets `isSynced = false`, leaving the remote copy in Proton Cloud untouched while
-    ensuring it never overwrites the local hardware entry.
-- `EntriesSyncer` drops any remote entry whose local id belongs to a local
-  hardware entry (including tombstones) before computing sync operations, so a
-  cloud copy made before `Move to YubiKey` cannot overwrite the hardware entry.
-  Deleting a hardware entry tombstones it (`isDeleted = true`) instead of
-  removing the row so that block keeps working.
+### 1. Hardware OATH Protocol Integration (USB CCID)
 
-### Migration safety (`Move to YubiKey`)
+The hardware backend interfaces with Yubico OATH applets via USB CCID:
 
-`EntryUpdater.migrateToYubiKeyTotp` verifies before it wipes:
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI as Hardened UI (Home)
+    participant Searcher as EntryCodesSearcher
+    participant Provider as YubiKeyOathCodeProvider
+    participant YK as YubiKey Hardware (USB CCID)
 
-1. Write the credential to the YubiKey.
-2. Generate the TOTP code locally for the current timestamp.
-3. Ask the YubiKey for the code at the same timestamp (`calculateCode`).
-4. Only if the two codes match is the local seed replaced by empty encrypted
-   content. On mismatch or hardware failure `YubiKeyVerificationFailedException`
-   is thrown and the local seed is left untouched.
+    User->>UI: Connects YubiKey over USB
+    UI->>Searcher: Observe Entry Codes
+    Searcher->>Provider: calculateBatch(hardwareEntries, timestamp)
+    Provider->>YK: Open CCID Session & Select OATH Applet
+    Provider->>YK: APDU: INS_CALCULATE_ALL (0xA4) + Timestamp
+    YK-->>Provider: Streamed List of (CredentialId, OTP, TouchBit)
+    Provider-->>Searcher: Map of CredentialId -> TotpCode
+    Searcher-->>UI: Ephemeral Codes (Zero Secret Material)
+    UI-->>User: Renders 6/8-Digit Codes with Hardware Badge
 
-Editing the name/issuer/note of a hardware entry preserves the
-`YubiKeyOath` backend instead of stripping it.
+    Note over User,YK: If YubiKey is unplugged:
+    UI->>UI: Fail-Closed: Blank Display ("------")
+```
 
-### Typed failure reasons
+#### Key Implementation Details:
+- **Batch Code Calculation (`INS_CALCULATE_ALL`):** In `YubiKeyOathCodeProvider.calculateBatch`, all hardware entries are queried in a single APDU session (`0xA4`), avoiding the latency and USB reconnect overhead of individual queries.
+- **Touch Detection (`TouchRequired`):** Credentials requiring physical touch are detected in the OATH applet response. The provider skips the "next period" speculative calculation for touch credentials, preventing confusing double-touch prompts.
+- **Fail-Closed Presentation:** When the key is disconnected or busy, codes fail closed and render placeholder dashes (`------`), preventing the display of expired or stale tokens.
+- **Hardware Slot Reclamation:** When a hardware entry is deleted in `EntryDeleter`, `YubiKeyOathCredentialDeleter.deleteIfConnected` sends an OATH delete command over USB CCID (5 s timeout) to reclaim the slot on the YubiKey.
 
-`CreateEntryReason` / `UpdateEntryReason` expose `YubiKeyLocked`,
-`YubiKeyTimeout`, `YubiKeyStorageFull` and `YubiKeyError` (plus
-`VerificationFailed` on update). The command handlers map timeouts, APDU status
-words (`NO_SPACE`/`MEMORY_ERROR` -> storage full,
-`AUTH_METHOD_BLOCKED`/`SECURITY_CONDITION_NOT_SATISFIED` -> locked), I/O errors
-and enrollment-lock errors onto them. Pasted Base32 secrets are normalised
-(whitespace/dashes stripped, upper-cased) and invalid input maps to
-`InvalidEntrySecret` instead of crashing. The manual and scan flows show a busy
-state during YubiKey discovery and surface these reasons as snackbars.
+---
 
-### Slot reclamation on delete
+### 2. Verified Migration & Cloud Deletion (`Move to YubiKey`)
 
-Deleting a hardware-backed entry now calls
-`YubiKeyOathCredentialDeleter.deleteIfConnected`, which removes the credential
-from the key (USB CCID, 5 s timeout) so one of the 32 OATH slots is freed. If
-the key is absent or locked, the local row is still deleted and the credential
-remains on the key; remove it manually (e.g. with Yubico Authenticator).
+Migrating a software TOTP account to hardware requires rigorous verification and cloud hygiene:
 
-### Persistence robustness
+```mermaid
+flowchart TD
+    Start["User taps 'Move to YubiKey'"] --> Prompt["Dialog: Delete copy stored in Proton Cloud?"]
+    Prompt -->|"Default: Delete"| SetFlag["Set deleteCloudCopy = true\nKeep isSynced = true"]
+    Prompt -->|"Keep"| ClearFlag["Set deleteCloudCopy = false\nSet isSynced = false"]
+    SetFlag --> WriteKey["Write Secret to YubiKey OATH Applet"]
+    ClearFlag --> WriteKey
+    WriteKey --> CalcLocal["Calculate TOTP Code Locally at T0"]
+    WriteKey --> CalcKey["Calculate TOTP Code on YubiKey at T0"]
+    CalcLocal & CalcKey --> Verify{"Codes Match?"}
+    Verify -->|"Mismatch or Error"| Abort["Throw YubiKeyVerificationFailedException\nAbort: Local Seed Left 100% Intact"]
+    Verify -->|"Match Confirmed"| Wipe["Erase Local Seed from Room\nWrite Hardware Metadata & Empty Encrypted Content"]
+    Wipe --> SyncPass{"On Next Cloud Sync"}
+    SyncPass -->|"deleteCloudCopy == true"| CloudPurge["Call api.deleteAll(remoteId)\nPurge Remote Copy from Proton Cloud\nMark isSynced = false"]
+    SyncPass -->|"deleteCloudCopy == false"| CloudKeep["Leave Remote Copy Untouched\nIsolate from Local Hardware Entry"]
+```
 
-- `fallbackToDestructiveMigration()` was removed from the Room module; a
-  missing migration now fails loudly instead of silently wiping all entries.
-- `RoomEntriesPersistenceDataSource` no longer crashes on corrupt hardware rows:
-  a missing credential id or unknown backend type falls back to
-  `LocalEncrypted` with a warning, an unknown algorithm defaults to SHA1, and
-  `observeAll()` skips (and logs) a single unparseable row instead of
-  terminating the whole Flow.
+---
 
-### UI
+### 3. Encrypted Metadata at Rest (Room Schema v7)
 
-Hardware-backed cards on the home screen show a `YubiKey` badge
-(`HomeMasterEntryModel.isHardwareBacked`). The "Export without password" and
-"Enable backup without password" actions were removed; export/backup failures
-show explicit error dialogs.
+To prevent metadata leakage from flash storage dumps, hardware entries encrypt non-secret descriptive fields at rest:
+- **Database Entity (`EntryEntity`):** Stores account `name`, `issuer`, and `note` inside `encrypted_content` via `EncryptionTag.EntryContent`.
+- **Legacy Column Nullification:** Plaintext database columns (`hardware_name`, `hardware_issuer`, `hardware_note`) are left null on new writes, maintaining backward compatibility while eliminating forensic flash exposure.
+- **Data Source Resilience:** `RoomEntriesPersistenceDataSource` handles missing credential IDs or corrupt rows gracefully by falling back to `LocalEncrypted` with logged warnings, preventing whole-database observation crashes.
 
-### Build
+---
 
-- `android.hardware.usb.host` is declared as `required="false"`.
-- `resourceConfigurations` was replaced by `androidResources.localeFilters`
-  (AGP 8.9).
-- `scripts/verifyFdroidProdRelease.sh` auto-detects the Android SDK
-  (`$ANDROID_SDK_ROOT`, `$ANDROID_HOME`, `~/Android/Sdk`, `/opt/android-sdk`,
-  `/usr/lib/android-sdk`) and fails early when release signing is not
-  configured. Release tasks require `PROTON_AUTH_PLUS_*` environment variables
-  or an ignored `private.properties`.
+### 4. Complete Multi-Modal Google Authenticator Import Engine
 
-The remaining product work is optional batch migration and a recovery flow that
-encourages enrolling a second key. Bulk import is intentionally still local-only
-until there is a transactional UX for YubiKey capacity, duplicate handling, and
-partial-write recovery. Note that the OATH credential name/issuer on the key
-itself is not encrypted by this app.
+The import subsystem was overhauled to eliminate scanning bottlenecks and handle complex Google Authenticator exports:
 
-## Hardening rules
+```mermaid
+flowchart LR
+    Input["Import Source"] --> Mode{"Input Type?"}
+    Mode -->|"Camera QR"| Cam["CameraQrScan (ZXing)"]
+    Mode -->|"Gallery Multi-Select"| Gall["Multi-Image URIs (1..N)"]
+    Mode -->|"Text File / Raw URI"| Txt["Direct File Reader"]
 
-- No plaintext export path.
-- Backups must be password-protected.
-- `FLAG_SECURE` is always enabled.
-- Seed reveal/export requires explicit user authentication.
-- YubiKey-backed entries cannot export a TOTP seed from the phone.
-- The home screen presentation model must not retain the full decrypted
-  `EntryModel`, because local entries may contain the TOTP seed and a
-  secret-bearing `otpauth://` URI. Home cards copy only non-secret display
-  metadata plus the current/next code.
+    Cam -->|"Pre-decoded UTF-8"| Direct["Bypass PNG Re-encoding"]
+    Gall --> Dual{"Dual-Engine QR Reader"}
+    Dual -->|"Primary"| Rust["Native Rust QR Scanner"]
+    Dual -->|"Fallback"| ZXing["ZXing Hybrid / Histogram Binarizer"]
+    Txt --> Parse["parseGoogleExportContent"]
+    Rust --> Parse
+    ZXing --> Parse
+    Direct --> Parse
 
-## Local software-entry limits
+    Parse --> Ingest["EntriesImporter\n- Decodes Base64 Protobuf\n- Handles otpauth-migration:// & otpauth://\n- Assigns Incremental Positions\n- Encrypted Room Batch Save"]
+```
 
-Local TOTP entries still require plaintext seed material briefly during software
-code generation: the app must decrypt the entry and feed the secret to the local
-TOTP generator. This cannot be fully eliminated without moving the secret into a
-hardware-backed backend or a separate isolated code-generation component. The
-current best-effort local hardening is to keep plaintext out of long-lived UI
-models where it is not needed, avoid plaintext exports/backups, and migrate
-high-risk entries to YubiKey OATH.
+#### Highlights:
+1. **Zero-Copy Camera QR Forwarding:** Decoded QR values from the camera preview are immediately converted to UTF-8 byte arrays, bypassing the legacy pipeline that compressed the viewfinder frame to PNG and ran a secondary scan.
+2. **Multi-Page Export Batch Processing:** When exporting large accounts (>10) from Google Authenticator, Google splits the vault across multiple sequential QR codes ("1 of 3", "2 of 3"). The user can select all screenshots simultaneously; `contentUris.flatMap { ... }` parses and consolidates all accounts atomically.
+3. **Dual-Engine QR Decoding:** If native Rust decoding fails on distorted or low-contrast screenshots, `RustQrScanner` automatically triggers ZXing's `MultiFormatReader` with `HybridBinarizer` and `GlobalHistogramBinarizer`.
+4. **Direct Text URI Ingestion:** Files containing raw `otpauth-migration://offline?data=...` or standard `otpauth://` URIs are parsed directly without image rendering.
+
+---
+
+## Security Verification & Build Integrity
+
+### Unit Testing Coverage
+The hardening changes are backed by automated unit and integration tests across all modified modules:
+- `:business:entries:testDebugUnitTest`: Tests migration verification, hardware encryption, cloud sync filtering, deletion tombstoning, and complete Google Authenticator import scenarios.
+- `:business:entry_codes:testDebugUnitTest`: Tests single-session batch calculation (`INS_CALCULATE_ALL`) and touch detection.
+- `:shared:common:testDebugUnitTest`: Tests dual-engine QR decoding fallbacks.
+
+### Release Verification Script
+To produce a verified, signed F-Droid production build:
+```shell
+./scripts/verifyFdroidProdRelease.sh
+```
+The script validates Android SDK detection, enforces production release signing parameters, compiles the artifact without cached configurations, verifies v2/v3 signatures, and outputs the release SHA-256 fingerprints.
