@@ -27,6 +27,8 @@ import proton.android.authenticator.business.entries.application.create.CreateEn
 import proton.android.authenticator.business.entries.application.create.CreateEntryCommandHandler
 import proton.android.authenticator.business.entries.application.delete.DeleteEntryCommand
 import proton.android.authenticator.business.entries.application.delete.DeleteEntryCommandHandler
+import proton.android.authenticator.business.entries.application.delete.YubiKeyOathCredentialDeleter
+import proton.android.authenticator.business.entries.application.delete.YubiKeyOathCredentialDeleterImpl
 import proton.android.authenticator.business.entries.application.exportall.ExportEntriesCommand
 import proton.android.authenticator.business.entries.application.exportall.ExportEntriesCommandHandler
 import proton.android.authenticator.business.entries.application.find.FindEntryQuery
@@ -145,5 +147,10 @@ internal abstract class BusinessEntriesModule {
     internal abstract fun bindEntriesPersistenceDataSource(
         impl: RoomEntriesPersistenceDataSource
     ): PersistenceDataSource<Entry>
+
+    @[Binds Singleton]
+    internal abstract fun bindYubiKeyOathCredentialDeleter(
+        impl: YubiKeyOathCredentialDeleterImpl
+    ): YubiKeyOathCredentialDeleter
 
 }

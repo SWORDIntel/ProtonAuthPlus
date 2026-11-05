@@ -116,16 +116,16 @@ internal class EntryCodesSearcher @Inject constructor(
 
         return flow {
             while (currentCoroutineContext().isActive) {
-                indexedUris.associate { indexedUri ->
-                    val code = runCatching {
-                        yubiKeyOathCodeProvider.calculate(
-                            uri = indexedUri.uri,
-                            nowSeconds = timeProvider.currentSeconds()
-                        )
-                    }.getOrElse {
-                        HARDWARE_CODE_UNAVAILABLE
-                    }
+                val uris = indexedUris.map(IndexedUri::uri)
+                val batchCodes = runCatching {
+                    yubiKeyOathCodeProvider.calculateBatch(
+                        uris = uris,
+                        nowSeconds = timeProvider.currentSeconds()
+                    )
+                }.getOrNull().orEmpty()
 
+                indexedUris.associate { indexedUri ->
+                    val code = batchCodes[indexedUri.uri] ?: HARDWARE_CODE_UNAVAILABLE
                     indexedUri.index to code
                 }.also { codes ->
                     emit(codes)

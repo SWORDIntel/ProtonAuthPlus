@@ -22,7 +22,16 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 REPO_ROOT=$(cd -- "${SCRIPT_DIR}/.." && pwd)
-SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/opt/android-sdk}}"
+SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+if [[ -z "${SDK_ROOT}" || ! -d "${SDK_ROOT}" ]]; then
+    for candidate in "$HOME/Android/Sdk" "/opt/android-sdk" "/usr/lib/android-sdk"; do
+        if [[ -d "${candidate}" ]]; then
+            SDK_ROOT="${candidate}"
+            break
+        fi
+    done
+fi
+SDK_ROOT="${SDK_ROOT:-/opt/android-sdk}"
 BUILD_TOOLS_DIR="${SDK_ROOT}/build-tools"
 APK_PATH="${REPO_ROOT}/app/build/outputs/apk/fdroidProd/release/app-fdroid-prod-release.apk"
 
@@ -58,6 +67,38 @@ fi
 
 export ANDROID_HOME="${SDK_ROOT}"
 export ANDROID_SDK_ROOT="${SDK_ROOT}"
+
+# Release signing pre-flight verification
+PRIVATE_PROPERTIES="${REPO_ROOT}/private.properties"
+missing_signing_vars=()
+for var in PROTON_AUTH_PLUS_STORE_FILE PROTON_AUTH_PLUS_STORE_PASSWORD PROTON_AUTH_PLUS_KEY_ALIAS PROTON_AUTH_PLUS_KEY_PASSWORD; do
+    val="${!var:-}"
+    if [[ -z "${val}" && -f "${PRIVATE_PROPERTIES}" ]]; then
+        val=$(grep -E "^[[:space:]]*${var}=" "${PRIVATE_PROPERTIES}" 2>/dev/null | cut -d'=' -f2- | tr -d '\r\n[:space:]' || true)
+    fi
+    if [[ -z "${val}" ]]; then
+        missing_signing_vars+=("${var}")
+    fi
+done
+
+if [[ ${#missing_signing_vars[@]} -gt 0 ]]; then
+    echo "Error: Release signing credentials are not configured." >&2
+    echo "Missing: ${missing_signing_vars[*]}" >&2
+    echo "" >&2
+    echo "Before invoking ./gradlew assembleFdroidProdRelease, please provide release signing credentials via:" >&2
+    echo "1. Environment variables:" >&2
+    echo "   export PROTON_AUTH_PLUS_STORE_FILE=\"/path/to/keystore.jks\"" >&2
+    echo "   export PROTON_AUTH_PLUS_STORE_PASSWORD=\"<store-password>\"" >&2
+    echo "   export PROTON_AUTH_PLUS_KEY_ALIAS=\"<key-alias>\"" >&2
+    echo "   export PROTON_AUTH_PLUS_KEY_PASSWORD=\"<key-password>\"" >&2
+    echo "" >&2
+    echo "2. Or define them in ${PRIVATE_PROPERTIES}:" >&2
+    echo "   PROTON_AUTH_PLUS_STORE_FILE=/path/to/keystore.jks" >&2
+    echo "   PROTON_AUTH_PLUS_STORE_PASSWORD=<store-password>" >&2
+    echo "   PROTON_AUTH_PLUS_KEY_ALIAS=<key-alias>" >&2
+    echo "   PROTON_AUTH_PLUS_KEY_PASSWORD=<key-password>" >&2
+    exit 1
+fi
 
 extract_package_id() {
     local badging=$1

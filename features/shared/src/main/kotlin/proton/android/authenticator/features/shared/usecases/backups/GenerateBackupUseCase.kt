@@ -30,6 +30,7 @@ import javax.inject.Inject
 class GenerateBackupUseCase @Inject constructor(private val commandBus: CommandBus) {
 
     suspend operator fun invoke(entryModels: List<EntryModel>): Answer<Unit, GenerateBackupReason> = entryModels
+        .filter { it.credentialBackend == EntryCredentialBackend.LocalEncrypted }
         .map { entryModel ->
             BackupEntry(
                 id = entryModel.id,

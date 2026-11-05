@@ -42,23 +42,23 @@ data class EntryEntity(
     @ColumnInfo(name = Columns.MODIFIED_AT)
     val modifiedAt: Long,
     @ColumnInfo(name = Columns.CREDENTIAL_BACKEND_TYPE, defaultValue = "local_encrypted")
-    val credentialBackendType: String,
+    val credentialBackendType: String = "local_encrypted",
     @ColumnInfo(name = Columns.HARDWARE_CREDENTIAL_ID)
-    val hardwareCredentialId: String?,
+    val hardwareCredentialId: String? = null,
     @ColumnInfo(name = Columns.HARDWARE_DEVICE_ID)
-    val hardwareDeviceId: String?,
+    val hardwareDeviceId: String? = null,
     @ColumnInfo(name = Columns.HARDWARE_NAME)
-    val hardwareName: String?,
+    val hardwareName: String? = null,
     @ColumnInfo(name = Columns.HARDWARE_ISSUER)
-    val hardwareIssuer: String?,
+    val hardwareIssuer: String? = null,
     @ColumnInfo(name = Columns.HARDWARE_NOTE)
-    val hardwareNote: String?,
+    val hardwareNote: String? = null,
     @ColumnInfo(name = Columns.HARDWARE_PERIOD)
-    val hardwarePeriod: Int?,
+    val hardwarePeriod: Int? = null,
     @ColumnInfo(name = Columns.HARDWARE_ALGORITHM)
-    val hardwareAlgorithm: Int?,
+    val hardwareAlgorithm: Int? = null,
     @ColumnInfo(name = Columns.HARDWARE_DIGITS)
-    val hardwareDigits: Int?
+    val hardwareDigits: Int? = null
 ) {
 
     internal object Columns {

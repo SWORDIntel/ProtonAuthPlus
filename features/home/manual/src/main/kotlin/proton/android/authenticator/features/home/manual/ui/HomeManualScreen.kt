@@ -18,10 +18,13 @@
 
 package proton.android.authenticator.features.home.manual.ui
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +40,7 @@ import proton.android.authenticator.shared.ui.domain.models.UiIcon
 import proton.android.authenticator.shared.ui.domain.models.UiText
 import proton.android.authenticator.shared.ui.domain.modifiers.backgroundScreenGradient
 import proton.android.authenticator.shared.ui.domain.screens.ScaffoldScreen
+import proton.android.authenticator.shared.ui.domain.theme.Theme
 import proton.android.authenticator.shared.ui.domain.theme.ThemePadding
 import proton.android.authenticator.shared.ui.R as uiR
 
@@ -71,31 +75,45 @@ fun HomeManualScreen(
                     SmallTopBar(
                         title = currentState.title,
                         navigationIcon = UiIcon.Resource(id = uiR.drawable.ic_cross),
-                        onNavigationClick = onNavigationClick,
+                        onNavigationClick = {
+                            if (!currentState.formModel.isLoading) onNavigationClick()
+                        },
                         action = UiText.Resource(id = uiR.string.action_save),
-                        isActionEnabled = currentState.formModel.isValid,
+                        isActionEnabled = currentState.formModel.isValid && !currentState.formModel.isLoading,
                         onActionClick = { onSubmitForm(currentState.formModel) }
                     )
                 }
             ) { paddingValues ->
-                HomeManualContent(
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(state = rememberScrollState())
                         .padding(paddingValues = paddingValues)
-                        .padding(horizontal = ThemePadding.Medium),
-                    formModel = currentState.formModel,
-                    onTitleChange = ::onTitleChange,
-                    onSecretChange = ::onSecretChange,
-                    onIssuerChange = ::onIssuerChange,
-                    onDigitsChange = ::onDigitsChange,
-                    onTimeIntervalChange = ::onTimeIntervalChange,
-                    onAlgorithmChange = ::onAlgorithmChange,
-                    onTypeChange = ::onTypeChange,
-                    onYubiKeyBackedChange = ::onYubiKeyBackedChange,
-                    onMigrateToYubiKey = ::onMigrateToYubiKey,
-                    onShowAdvanceOptions = ::onShowAdvanceOptions
-                )
+                ) {
+                    if (currentState.formModel.isLoading) {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Theme.colorScheme.accent
+                        )
+                    }
+
+                    HomeManualContent(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(state = rememberScrollState())
+                            .padding(horizontal = ThemePadding.Medium),
+                        formModel = currentState.formModel,
+                        onTitleChange = ::onTitleChange,
+                        onSecretChange = ::onSecretChange,
+                        onIssuerChange = ::onIssuerChange,
+                        onDigitsChange = ::onDigitsChange,
+                        onTimeIntervalChange = ::onTimeIntervalChange,
+                        onAlgorithmChange = ::onAlgorithmChange,
+                        onTypeChange = ::onTypeChange,
+                        onYubiKeyBackedChange = ::onYubiKeyBackedChange,
+                        onMigrateToYubiKey = ::onMigrateToYubiKey,
+                        onShowAdvanceOptions = ::onShowAdvanceOptions
+                    )
+                }
             }
         }
     }

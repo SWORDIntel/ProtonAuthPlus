@@ -117,11 +117,7 @@ internal class BackupsPasswordViewModel @Inject constructor(
         }
     }
 
-    internal fun onEnableBackupWithoutPassword() {
-        enableBackup(encryptedPassword = null)
-    }
-
-    private fun enableBackup(encryptedPassword: EncryptedString?) {
+    private fun enableBackup(encryptedPassword: EncryptedString) {
         viewModelScope.launch {
             observeBackupUseCase().first()
                 .copy(

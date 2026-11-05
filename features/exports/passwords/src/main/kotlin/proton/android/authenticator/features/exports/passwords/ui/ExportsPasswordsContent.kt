@@ -34,7 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import proton.android.authenticator.features.exports.passwords.R
 import proton.android.authenticator.features.exports.passwords.presentation.ExportsPasswordsState
-import proton.android.authenticator.shared.ui.domain.components.buttons.VerticalActionsButtons
+import proton.android.authenticator.shared.ui.domain.components.buttons.PrimaryActionButton
 import proton.android.authenticator.shared.ui.domain.components.textfields.StandaloneSecureTextField
 import proton.android.authenticator.shared.ui.domain.theme.Theme
 import proton.android.authenticator.shared.ui.domain.theme.ThemePadding
@@ -46,7 +46,6 @@ internal fun ExportsPasswordsContent(
     onPasswordChange: (String) -> Unit,
     onVisibilityChange: (Boolean) -> Unit,
     onExportWithPassword: () -> Unit,
-    onExportWithoutPassword: () -> Unit,
     modifier: Modifier = Modifier
 ) = with(state) {
     val focusRequester = remember { FocusRequester() }
@@ -92,13 +91,11 @@ internal fun ExportsPasswordsContent(
             onVisibilityChange = onVisibilityChange
         )
 
-        VerticalActionsButtons(
+        PrimaryActionButton(
             modifier = Modifier.fillMaxWidth(),
-            primaryActionText = stringResource(id = R.string.exports_password_action_primary),
-            onPrimaryActionClick = onExportWithPassword,
-            isPrimaryActionEnabled = isValidPassword,
-            secondaryActionText = stringResource(id = R.string.exports_password_action_secondary),
-            onSecondaryActionClick = onExportWithoutPassword
+            text = stringResource(id = R.string.exports_password_action_primary),
+            onClick = onExportWithPassword,
+            isEnabled = isValidPassword
         )
     }
 }

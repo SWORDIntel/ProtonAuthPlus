@@ -51,6 +51,13 @@ internal class ExportEntriesCommandHandler @Inject constructor(
             throwable = error,
             reason = ExportEntriesReason.HardwareBackedEntries
         )
+    } catch (error: ExportNoEntriesError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            tag = TAG,
+            message = "Could not export entries because there are no exportable entries",
+            throwable = error,
+            reason = ExportEntriesReason.NoEntries
+        )
     } catch (error: AuthenticatorException) {
         ErrorLoggingUtils.logAndReturnFailure(
             tag = TAG,
@@ -63,14 +70,21 @@ internal class ExportEntriesCommandHandler @Inject constructor(
             tag = TAG,
             message = "Could not export entries due to file not found",
             throwable = error,
-            reason = ExportEntriesReason.InvalidEntries
+            reason = ExportEntriesReason.FileError
+        )
+    } catch (error: SecurityException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            tag = TAG,
+            message = "Could not export entries due to file permission issues",
+            throwable = error,
+            reason = ExportEntriesReason.FileError
         )
     } catch (error: IOException) {
         ErrorLoggingUtils.logAndReturnFailure(
             tag = TAG,
             message = "Could not export entries due to IO exception",
             throwable = error,
-            reason = ExportEntriesReason.InvalidEntries
+            reason = ExportEntriesReason.FileError
         )
     }
 

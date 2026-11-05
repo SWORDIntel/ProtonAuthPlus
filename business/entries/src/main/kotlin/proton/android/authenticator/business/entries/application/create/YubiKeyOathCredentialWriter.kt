@@ -51,7 +51,7 @@ internal class YubiKeyOathCredentialWriter @Inject constructor(
                 command.name,
                 OathType.TOTP,
                 command.algorithm.toYubiKeyHashAlgorithm(),
-                Base32.decode(command.secret),
+                Base32.decode(command.secret.trim().replace(" ", "").replace("-", "").uppercase()),
                 command.digits,
                 command.period,
                 0,
@@ -66,29 +66,44 @@ internal class YubiKeyOathCredentialWriter @Inject constructor(
             }
         }
 
-    private suspend fun <R> withUsbOathSession(block: (OathSession) -> R): R = withTimeout(USB_DISCOVERY_TIMEOUT_MILLIS) {
-        suspendCancellableCoroutine { continuation ->
-            val manager = YubiKitManager(context)
-            val resumed = AtomicBoolean(false)
-
-            fun resumeOnce(result: Result<R>) {
-                if (!resumed.compareAndSet(false, true)) return
-
-                manager.stopUsbDiscovery()
-                continuation.resume(result)
+    internal suspend fun calculateCode(credentialId: String, timestampSeconds: Long): String =
+        withUsbOathSession { oathSession ->
+            if (oathSession.isLocked) {
+                throw YubiKeyOathEnrollmentLockedError()
             }
 
-            continuation.invokeOnCancellation {
-                manager.stopUsbDiscovery()
-            }
+            val targetId = Base64.decode(credentialId, Base64.URL_SAFE or Base64.NO_WRAP)
+            val credential = oathSession.getCredentials()
+                .firstOrNull { credential -> credential.id.contentEquals(targetId) }
+                ?: throw YubiKeyOathCredentialNotFoundError()
 
-            manager.startUsbDiscovery(
-                UsbConfiguration().handlePermissions(true)
-            ) { device ->
-                resumeOnce(runCatching { device.useOathSession(block) })
-            }
-        }.getOrThrow()
-    }
+            oathSession.calculateCode(credential, timestampSeconds).value
+        }
+
+    private suspend fun <R> withUsbOathSession(block: (OathSession) -> R): R =
+        withTimeout(USB_DISCOVERY_TIMEOUT_MILLIS) {
+            suspendCancellableCoroutine { continuation ->
+                val manager = YubiKitManager(context)
+                val resumed = AtomicBoolean(false)
+
+                fun resumeOnce(result: Result<R>) {
+                    if (!resumed.compareAndSet(false, true)) return
+
+                    manager.stopUsbDiscovery()
+                    continuation.resume(result)
+                }
+
+                continuation.invokeOnCancellation {
+                    manager.stopUsbDiscovery()
+                }
+
+                manager.startUsbDiscovery(
+                    UsbConfiguration().handlePermissions(true)
+                ) { device ->
+                    resumeOnce(runCatching { device.useOathSession(block) })
+                }
+            }.getOrThrow()
+        }
 
     private fun <R> UsbYubiKeyDevice.useOathSession(block: (OathSession) -> R): R = use {
         openConnection(SmartCardConnection::class.java).use { connection ->
@@ -113,3 +128,5 @@ internal data class YubiKeyOathCredentialWriteResult(
 )
 
 internal class YubiKeyOathEnrollmentLockedError : Exception()
+
+internal class YubiKeyOathCredentialNotFoundError : Exception()

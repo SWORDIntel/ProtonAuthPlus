@@ -45,36 +45,115 @@ internal class YubiKeyOathCodeProvider @Inject constructor(
     private val codeCache = ConcurrentHashMap<String, CachedCode>()
 
     internal suspend fun calculate(uri: String, nowSeconds: Long): EntryCode {
-        val request = YubiKeyOathCodeRequest.parse(uri)
-        val periodIndex = nowSeconds / request.periodSeconds
+        return calculateBatch(listOf(uri), nowSeconds)[uri]
+            ?: throw YubiKeyOathCredentialNotFoundError()
+    }
+
+    internal suspend fun calculateBatch(uris: List<String>, nowSeconds: Long): Map<String, EntryCode> {
+        if (uris.isEmpty()) return emptyMap()
 
         if (!hasConnectedYubiKey()) {
-            codeCache.remove(uri)
+            codeCache.clear()
             throw YubiKeyOathUnavailableError()
         }
 
-        codeCache[uri]
-            ?.takeIf { cachedCode -> cachedCode.periodIndex == periodIndex }
-            ?.let { cachedCode -> return cachedCode.entryCode }
+        val requestsByUri = uris.distinct().associateWith { uri ->
+            runCatching { YubiKeyOathCodeRequest.parse(uri) }.getOrNull()
+        }
 
-        return withUsbOathSession { oathSession ->
-            val credential = oathSession.getCredentials()
-                .firstOrNull { credential -> credential.getId().contentEquals(request.credentialId) }
-                ?: throw YubiKeyOathCredentialNotFoundError()
+        val resultMap = mutableMapOf<String, EntryCode>()
+        val urisToCalculate = mutableListOf<Pair<String, YubiKeyOathCodeRequest>>()
 
-            val currentCode = oathSession.calculateCode(credential, nowSeconds)
-            val nextCode = oathSession.calculateCode(credential, currentCode.validUntil)
-
-            EntryCode(
-                currentCode = currentCode.value,
-                nextCode = nextCode.value
-            ).also { entryCode ->
-                codeCache[uri] = CachedCode(
-                    periodIndex = periodIndex,
-                    entryCode = entryCode
-                )
+        for ((uri, request) in requestsByUri) {
+            if (request == null) continue
+            val periodIndex = nowSeconds / request.periodSeconds
+            val cached = codeCache[uri]
+            if (cached != null && cached.periodIndex == periodIndex) {
+                resultMap[uri] = cached.entryCode
+            } else {
+                urisToCalculate.add(uri to request)
             }
         }
+
+        if (urisToCalculate.isEmpty()) {
+            return resultMap
+        }
+
+        val calculated = try {
+            withUsbOathSession { oathSession ->
+                calculateOathBatch(oathSession, urisToCalculate, nowSeconds)
+            }
+        } catch (e: Exception) {
+            if (!hasConnectedYubiKey()) {
+                codeCache.clear()
+            }
+            throw e
+        }
+
+        for ((uri, entryCode) in calculated) {
+            resultMap[uri] = entryCode
+            val request = requestsByUri[uri] ?: continue
+            val periodIndex = nowSeconds / request.periodSeconds
+            codeCache[uri] = CachedCode(
+                periodIndex = periodIndex,
+                entryCode = entryCode
+            )
+        }
+
+        return resultMap
+    }
+
+    private fun calculateOathBatch(
+        oathSession: OathSession,
+        urisToCalculate: List<Pair<String, YubiKeyOathCodeRequest>>,
+        nowSeconds: Long
+    ): Map<String, EntryCode> {
+        val nowMillis = nowSeconds * MILLIS_PER_SECOND
+        val calculatedCodes: Map<Credential, Code?> = runCatching {
+            oathSession.calculateCodes(nowMillis)
+        }.getOrDefault(emptyMap())
+
+        val fallbackCredentials by lazy {
+            runCatching { oathSession.getCredentials() }.getOrDefault(emptyList())
+        }
+
+        val result = mutableMapOf<String, EntryCode>()
+
+        for ((uri, request) in urisToCalculate) {
+            val calculateEntry = calculatedCodes.entries.firstOrNull { (cred, _) ->
+                cred.getId().contentEquals(request.credentialId)
+            }
+
+            val credential = calculateEntry?.key
+                ?: fallbackCredentials.firstOrNull { it.getId().contentEquals(request.credentialId) }
+                ?: continue
+
+            val isTouchRequired = credential.isTouchRequired
+            val preCalculatedCode = calculateEntry?.value
+
+            val currentCodeResult = if (preCalculatedCode != null) {
+                preCalculatedCode
+            } else {
+                runCatching {
+                    oathSession.calculateCode(credential, nowMillis)
+                }.getOrNull() ?: continue
+            }
+
+            val nextCode = if (isTouchRequired) {
+                CODE_PLACEHOLDER
+            } else {
+                runCatching {
+                    oathSession.calculateCode(credential, currentCodeResult.validUntil).value
+                }.getOrDefault(CODE_PLACEHOLDER)
+            }
+
+            result[uri] = EntryCode(
+                currentCode = currentCodeResult.value,
+                nextCode = nextCode
+            )
+        }
+
+        return result
     }
 
     private suspend fun <R> withUsbOathSession(block: (OathSession) -> R): R = withTimeout(USB_DISCOVERY_TIMEOUT_MILLIS) {
@@ -114,7 +193,7 @@ internal class YubiKeyOathCodeProvider @Inject constructor(
     }
 
     private fun hasConnectedYubiKey(): Boolean {
-        val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+        val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return false
         return usbManager.deviceList.values.any { device ->
             device.vendorId == YUBICO_VENDOR_ID
         }
@@ -162,8 +241,10 @@ internal class YubiKeyOathCodeProvider @Inject constructor(
     }
 
     private companion object {
-        private const val USB_DISCOVERY_TIMEOUT_MILLIS = 5_000L
+        private const val USB_DISCOVERY_TIMEOUT_MILLIS = 10_000L
         private const val DEFAULT_PERIOD_SECONDS = 30L
+        private const val MILLIS_PER_SECOND = 1_000L
+        private const val CODE_PLACEHOLDER = "------"
         private const val YUBICO_VENDOR_ID = 0x1050
         private const val YUBIKEY_OATH_SCHEME = "yubikey-oath"
     }

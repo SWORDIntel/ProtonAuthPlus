@@ -57,11 +57,9 @@ internal class BackupGenerator @Inject constructor(
 ) {
 
     internal suspend fun generate(backupEntries: List<BackupEntry>) {
-        if (backupEntries.isEmpty()) {
+        val validEntries = backupEntries.filterNot(BackupEntry::isHardwareBacked)
+        if (validEntries.isEmpty()) {
             throw BackupNoEntriesError()
-        }
-        if (backupEntries.any(BackupEntry::isHardwareBacked)) {
-            throw BackupHardwareBackedEntriesError()
         }
 
         repository.find()
@@ -69,7 +67,7 @@ internal class BackupGenerator @Inject constructor(
             .also(::ensureBackupIsEnabled)
             .also { backup -> cleanLastBackupIfLimitReached(backup) }
             .let(::updateBackup)
-            .also { backup -> generateBackup(backup, backupEntries) }
+            .also { backup -> generateBackup(backup, validEntries) }
             .also { backup -> repository.save(backup) }
     }
 

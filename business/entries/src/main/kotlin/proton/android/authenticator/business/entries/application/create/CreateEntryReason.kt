@@ -24,5 +24,9 @@ enum class CreateEntryReason : AnswerReason {
     CannotSaveEntry,
     InvalidEntryTitle,
     InvalidEntrySecret,
+    YubiKeyLocked,
+    YubiKeyTimeout,
+    YubiKeyStorageFull,
+    YubiKeyError,
     Unknown
 }

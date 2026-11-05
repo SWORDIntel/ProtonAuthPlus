@@ -93,8 +93,7 @@ fun ExportsPasswordsScreen(
             state = state,
             onPasswordChange = ::onPasswordChange,
             onVisibilityChange = ::onPasswordVisibilityChange,
-            onExportWithPassword = ::onExportEntriesWithPassword,
-            onExportWithoutPassword = ::onExportEntriesWithoutPassword
+            onExportWithPassword = ::onExportEntriesWithPassword
         )
     }
 }

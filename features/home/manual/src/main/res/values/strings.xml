@@ -32,8 +32,13 @@
     <string name="home_manual_form_yubikey_backend_title">Store on YubiKey</string>
     <string name="home_manual_form_yubikey_backend_description">Writes the secret to the inserted YubiKey OATH app and stores only metadata locally.</string>
     <string name="home_manual_form_migrate_yubikey_action">Move to YubiKey</string>
+    <string name="home_manual_yubikey_waiting">Waiting for YubiKey…</string>
 
     <string name="home_manual_snackbar_message_create_error">There was an error creating the entry</string>
     <string name="home_manual_snackbar_message_update_error">There was an error updating the entry</string>
     <string name="home_manual_snackbar_message_migrate_yubikey_error">There was an error moving the entry to YubiKey</string>
+    <string name="home_manual_snackbar_message_yubikey_locked">YubiKey OATH is locked. Please unlock your key and try again.</string>
+    <string name="home_manual_snackbar_message_yubikey_timeout">YubiKey operation timed out. Please insert or tap your key and try again.</string>
+    <string name="home_manual_snackbar_message_yubikey_storage_full">YubiKey storage is full. Please remove unused credentials to free up space.</string>
+    <string name="home_manual_snackbar_message_yubikey_verification_failed">YubiKey code verification failed. Migration cancelled.</string>
 </resources>

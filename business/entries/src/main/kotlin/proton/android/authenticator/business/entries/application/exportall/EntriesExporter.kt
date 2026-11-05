@@ -42,12 +42,12 @@ internal class EntriesExporter @Inject constructor(
     suspend fun export(destinationUri: Uri, password: String?): Int = repository.findAll()
         .first()
         .filterNot(Entry::isDeleted)
-        .also { entries ->
-            if (entries.any { it.credentialBackend is EntryCredentialBackend.YubiKeyOath }) {
-                throw ExportHardwareBackedEntriesError()
-            }
-        }
+        .filter { it.credentialBackend == EntryCredentialBackend.LocalEncrypted }
         .let { entries ->
+            if (entries.isEmpty()) {
+                throw ExportNoEntriesError()
+            }
+
             encryptionContextProvider.withEncryptionContext {
                 entries.map { entry ->
                     authenticatorClient.deserializeEntry(

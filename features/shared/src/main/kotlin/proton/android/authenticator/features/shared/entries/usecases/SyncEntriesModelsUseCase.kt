@@ -23,6 +23,7 @@ import proton.android.authenticator.business.entries.application.syncall.SyncEnt
 import proton.android.authenticator.business.entries.application.syncall.SyncEntriesReason
 import proton.android.authenticator.business.entries.application.syncall.SyncEntry
 import proton.android.authenticator.business.entries.application.syncall.SyncKey
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.features.shared.keys.usecases.GetAllKeysUseCase
 import proton.android.authenticator.features.shared.usecases.settings.ObserveSettingsUseCase
 import proton.android.authenticator.features.shared.usecases.settings.UpdateSettingsUseCase
@@ -55,6 +56,7 @@ class SyncEntriesModelsUseCase @Inject constructor(
 
         return observeEntryModelsUseCase(includeDeletedEntries = true)
             .first()
+            .filter { entryModel -> entryModel.credentialBackend == EntryCredentialBackend.LocalEncrypted }
             .map { entryModel ->
                 SyncEntry(
                     id = entryModel.id,

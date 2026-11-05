@@ -24,5 +24,10 @@ enum class UpdateEntryReason : AnswerReason {
     EntryNotFound,
     InvalidEntrySecret,
     InvalidEntryTitle,
+    YubiKeyLocked,
+    YubiKeyTimeout,
+    YubiKeyStorageFull,
+    YubiKeyError,
+    VerificationFailed,
     Unknown
 }

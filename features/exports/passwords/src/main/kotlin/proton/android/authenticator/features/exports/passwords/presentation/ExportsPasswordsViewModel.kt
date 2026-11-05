@@ -44,8 +44,6 @@ internal class ExportsPasswordsViewModel @Inject constructor(
 
     private val isPasswordVisibleFlow = MutableStateFlow(value = false)
 
-    private val shouldUsePasswordFlow = MutableStateFlow(value = false)
-
     private val eventFlow = MutableStateFlow<ExportsPasswordsEvent>(
         value = ExportsPasswordsEvent.Idle
     )
@@ -75,7 +73,7 @@ internal class ExportsPasswordsViewModel @Inject constructor(
         viewModelScope.launch {
             exportEntriesUseCase(
                 uri = uri,
-                password = password.takeIf { shouldUsePasswordFlow.value }
+                password = password
             ).fold(
                 onFailure = { reason ->
                     AuthenticatorLogger.w(TAG, "Entries export failed due to: $reason")
@@ -92,16 +90,10 @@ internal class ExportsPasswordsViewModel @Inject constructor(
     }
 
     internal fun onExportEntriesWithPassword() {
-        startEntriesExport(shouldUsePassword = true)
+        startEntriesExport()
     }
 
-    internal fun onExportEntriesWithoutPassword() {
-        startEntriesExport(shouldUsePassword = false)
-    }
-
-    private fun startEntriesExport(shouldUsePassword: Boolean) {
-        shouldUsePasswordFlow.update { shouldUsePassword }
-
+    private fun startEntriesExport() {
         eventFlow.update {
             ExportsPasswordsEvent.OnEntriesExportStarted(fileName = ExportsPasswordsState.FILE_NAME)
         }

@@ -18,13 +18,20 @@
 
 package proton.android.authenticator.business.entries.application.update
 
-import proton.android.authenticator.business.shared.domain.errors.ErrorLoggingUtils
+import com.yubico.yubikit.core.application.CommandException
+import com.yubico.yubikit.core.application.TimeoutException
+import com.yubico.yubikit.core.smartcard.ApduException
+import com.yubico.yubikit.core.smartcard.SW
+import kotlinx.coroutines.TimeoutCancellationException
+import proton.android.authenticator.business.entries.application.create.YubiKeyOathCredentialNotFoundError
 import proton.android.authenticator.business.entries.application.create.YubiKeyOathEnrollmentLockedError
+import proton.android.authenticator.business.shared.domain.errors.ErrorLoggingUtils
 import proton.android.authenticator.commonrust.AuthenticatorException
 import proton.android.authenticator.commonrust.AuthenticatorMobileClientInterface
 import proton.android.authenticator.shared.common.domain.answers.Answer
 import proton.android.authenticator.shared.common.domain.infrastructure.commands.CommandHandler
 import proton.android.authenticator.shared.common.logs.AuthenticatorLogger
+import java.io.IOException
 import javax.inject.Inject
 
 internal class UpdateEntryCommandHandler @Inject constructor(
@@ -50,11 +57,65 @@ internal class UpdateEntryCommandHandler @Inject constructor(
                 AuthenticatorLogger.i(TAG, "Successfully updated entry with id: ${command.id}")
             }
             .let(Answer<Unit, UpdateEntryReason>::Success)
+    } catch (e: TimeoutCancellationException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not update entry due to timeout",
+            reason = UpdateEntryReason.YubiKeyTimeout,
+            tag = TAG
+        )
+    } catch (e: TimeoutException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not update entry due to YubiKey timeout",
+            reason = UpdateEntryReason.YubiKeyTimeout,
+            tag = TAG
+        )
     } catch (e: YubiKeyOathEnrollmentLockedError) {
         ErrorLoggingUtils.logAndReturnFailure(
             throwable = e,
             message = "Could not migrate entry because YubiKey OATH is locked",
-            reason = UpdateEntryReason.Unknown,
+            reason = UpdateEntryReason.YubiKeyLocked,
+            tag = TAG
+        )
+    } catch (e: YubiKeyVerificationFailedException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not migrate entry because YubiKey verification failed",
+            reason = UpdateEntryReason.VerificationFailed,
+            tag = TAG
+        )
+    } catch (e: ApduException) {
+        val reason = when (e.sw) {
+            SW.NO_SPACE, SW.MEMORY_ERROR -> UpdateEntryReason.YubiKeyStorageFull
+            SW.AUTH_METHOD_BLOCKED, SW.SECURITY_CONDITION_NOT_SATISFIED -> UpdateEntryReason.YubiKeyLocked
+            else -> UpdateEntryReason.YubiKeyError
+        }
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not update entry due to APDU error (SW: ${e.sw})",
+            reason = reason,
+            tag = TAG
+        )
+    } catch (e: CommandException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not update entry due to YubiKey command error",
+            reason = UpdateEntryReason.YubiKeyError,
+            tag = TAG
+        )
+    } catch (e: IOException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not update entry due to I/O error",
+            reason = UpdateEntryReason.YubiKeyError,
+            tag = TAG
+        )
+    } catch (e: YubiKeyOathCredentialNotFoundError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not update entry: credential not found",
+            reason = UpdateEntryReason.YubiKeyError,
             tag = TAG
         )
     } catch (e: AuthenticatorException.InvalidName) {
@@ -68,6 +129,13 @@ internal class UpdateEntryCommandHandler @Inject constructor(
         ErrorLoggingUtils.logAndReturnFailure(
             throwable = e,
             message = "Could not update entry due to invalid secret",
+            reason = UpdateEntryReason.InvalidEntrySecret,
+            tag = TAG
+        )
+    } catch (e: IllegalArgumentException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not update entry due to invalid secret format",
             reason = UpdateEntryReason.InvalidEntrySecret,
             tag = TAG
         )

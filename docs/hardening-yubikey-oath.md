@@ -24,7 +24,7 @@ runtime plaintext is the main exposure against a compromised endpoint.
   migration and is not retained in Room.
 - Code generation for YubiKey-backed entries requires USB/NFC access to the key.
 - Migration verifies that a YubiKey-generated code matches the existing local
-  entry before deleting the local seed.
+  entry before deleting the local seed (implemented, see below).
 
 ## Required Android pieces
 
@@ -38,6 +38,11 @@ runtime plaintext is the main exposure against a compromised endpoint.
 - `EntryCredentialBackend` separates local encrypted entries from YubiKey OATH
   entries.
 - Room schema version 7 adds hardware credential metadata columns.
+- Hardware entry metadata (name, issuer, note) is encrypted at rest in
+  `EntryEntity.encrypted_content` via `EncryptionTag.EntryContent`. The plaintext
+  columns (`hardware_name`, `hardware_issuer`, `hardware_note`) are left null on
+  new writes to prevent flash storage metadata leaks, while remaining backward-compatible
+  with older rows.
 - `CreateEntryCommand.FromYubiKeyTotp` writes the TOTP secret to the inserted
   USB YubiKey OATH app, then stores only metadata locally.
 - Manual TOTP creation exposes a `Store on YubiKey` option that uses the
@@ -49,14 +54,85 @@ runtime plaintext is the main exposure against a compromised endpoint.
   position are preserved, while the local seed payload is replaced with empty
   encrypted content and YubiKey OATH metadata.
 - `EntryCodesSearcher` routes `yubikey-oath://` entries to YubiKit over USB
-  instead of the local Rust TOTP generator.
-- Export and automatic backup refuse hardware-backed entries because the phone
-  cannot and should not export their seeds.
+  instead of the local Rust TOTP generator. All hardware entries are resolved in
+  a single CCID session via `YubiKeyOathCodeProvider.calculateBatch` (OATH
+  `CALCULATE ALL`), instead of one session per entry. Touch-required credentials
+  are detected so the "next code" lookup does not trigger a second touch prompt.
+- Export and automatic backup skip hardware-backed entries (they are filtered
+  out of the payload) because the phone cannot and should not export their
+  seeds. This no longer raises a fatal error, so automatic backups of the
+  remaining local entries keep working when a YubiKey entry exists.
+- Cloud sync (`SyncEntriesModelsUseCase`) only syncs `LocalEncrypted` entries.
+  Hardware entries carry no seed, so they are never pushed to Proton as empty
+  secrets / `yubikey-oath://` URIs.
 
-The remaining product work is mainly around polish: clearer YubiKey error
-messages, duplicate/capacity handling, and optional batch migration. Bulk import
-is intentionally still local-only until there is a transactional UX for YubiKey
-capacity, duplicate handling, and partial-write recovery.
+### Migration safety (`Move to YubiKey`)
+
+`EntryUpdater.migrateToYubiKeyTotp` verifies before it wipes:
+
+1. Write the credential to the YubiKey.
+2. Generate the TOTP code locally for the current timestamp.
+3. Ask the YubiKey for the code at the same timestamp (`calculateCode`).
+4. Only if the two codes match is the local seed replaced by empty encrypted
+   content. On mismatch or hardware failure `YubiKeyVerificationFailedException`
+   is thrown and the local seed is left untouched.
+
+Editing the name/issuer/note of a hardware entry preserves the
+`YubiKeyOath` backend instead of stripping it.
+
+### Typed failure reasons
+
+`CreateEntryReason` / `UpdateEntryReason` expose `YubiKeyLocked`,
+`YubiKeyTimeout`, `YubiKeyStorageFull` and `YubiKeyError` (plus
+`VerificationFailed` on update). The command handlers map timeouts, APDU status
+words (`NO_SPACE`/`MEMORY_ERROR` -> storage full,
+`AUTH_METHOD_BLOCKED`/`SECURITY_CONDITION_NOT_SATISFIED` -> locked), I/O errors
+and enrollment-lock errors onto them. Pasted Base32 secrets are normalised
+(whitespace/dashes stripped, upper-cased) and invalid input maps to
+`InvalidEntrySecret` instead of crashing. The manual and scan flows show a busy
+state during YubiKey discovery and surface these reasons as snackbars.
+
+### Slot reclamation on delete
+
+Deleting a hardware-backed entry now calls
+`YubiKeyOathCredentialDeleter.deleteIfConnected`, which removes the credential
+from the key (USB CCID, 5 s timeout) so one of the 32 OATH slots is freed. If
+the key is absent or locked, the local row is still deleted and the credential
+remains on the key; remove it manually (e.g. with Yubico Authenticator).
+
+### Persistence robustness
+
+- `fallbackToDestructiveMigration()` was removed from the Room module; a
+  missing migration now fails loudly instead of silently wiping all entries.
+- `RoomEntriesPersistenceDataSource` no longer crashes on corrupt hardware rows:
+  a missing credential id or unknown backend type falls back to
+  `LocalEncrypted` with a warning, an unknown algorithm defaults to SHA1, and
+  `observeAll()` skips (and logs) a single unparseable row instead of
+  terminating the whole Flow.
+
+### UI
+
+Hardware-backed cards on the home screen show a `YubiKey` badge
+(`HomeMasterEntryModel.isHardwareBacked`). The "Export without password" and
+"Enable backup without password" actions were removed; export/backup failures
+show explicit error dialogs.
+
+### Build
+
+- `android.hardware.usb.host` is declared as `required="false"`.
+- `resourceConfigurations` was replaced by `androidResources.localeFilters`
+  (AGP 8.9).
+- `scripts/verifyFdroidProdRelease.sh` auto-detects the Android SDK
+  (`$ANDROID_SDK_ROOT`, `$ANDROID_HOME`, `~/Android/Sdk`, `/opt/android-sdk`,
+  `/usr/lib/android-sdk`) and fails early when release signing is not
+  configured. Release tasks require `PROTON_AUTH_PLUS_*` environment variables
+  or an ignored `private.properties`.
+
+The remaining product work is optional batch migration and a recovery flow that
+encourages enrolling a second key. Bulk import is intentionally still local-only
+until there is a transactional UX for YubiKey capacity, duplicate handling, and
+partial-write recovery. Note that the OATH credential name/issuer on the key
+itself is not encrypted by this app.
 
 ## Hardening rules
 

@@ -18,12 +18,18 @@
 
 package proton.android.authenticator.business.entries.application.create
 
+import com.yubico.yubikit.core.application.CommandException
+import com.yubico.yubikit.core.application.TimeoutException
+import com.yubico.yubikit.core.smartcard.ApduException
+import com.yubico.yubikit.core.smartcard.SW
+import kotlinx.coroutines.TimeoutCancellationException
 import proton.android.authenticator.business.shared.domain.errors.ErrorLoggingUtils
 import proton.android.authenticator.commonrust.AuthenticatorException
 import proton.android.authenticator.commonrust.AuthenticatorMobileClientInterface
 import proton.android.authenticator.shared.common.domain.answers.Answer
 import proton.android.authenticator.shared.common.domain.infrastructure.commands.CommandHandler
 import proton.android.authenticator.shared.common.logs.AuthenticatorLogger
+import java.io.IOException
 import javax.inject.Inject
 
 internal class CreateEntryCommandHandler @Inject constructor(
@@ -41,11 +47,58 @@ internal class CreateEntryCommandHandler @Inject constructor(
         }
         AuthenticatorLogger.i(TAG, "Successfully created entry")
         Answer.Success(Unit)
+    } catch (e: TimeoutCancellationException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not create YubiKey-backed entry due to timeout",
+            reason = CreateEntryReason.YubiKeyTimeout,
+            tag = TAG
+        )
+    } catch (e: TimeoutException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not create YubiKey-backed entry due to YubiKey timeout",
+            reason = CreateEntryReason.YubiKeyTimeout,
+            tag = TAG
+        )
     } catch (e: YubiKeyOathEnrollmentLockedError) {
         ErrorLoggingUtils.logAndReturnFailure(
             throwable = e,
             message = "Could not create YubiKey-backed entry because OATH is locked",
-            reason = CreateEntryReason.Unknown,
+            reason = CreateEntryReason.YubiKeyLocked,
+            tag = TAG
+        )
+    } catch (e: ApduException) {
+        val reason = when (e.sw) {
+            SW.NO_SPACE, SW.MEMORY_ERROR -> CreateEntryReason.YubiKeyStorageFull
+            SW.AUTH_METHOD_BLOCKED, SW.SECURITY_CONDITION_NOT_SATISFIED -> CreateEntryReason.YubiKeyLocked
+            else -> CreateEntryReason.YubiKeyError
+        }
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not create YubiKey-backed entry due to APDU error (SW: ${e.sw})",
+            reason = reason,
+            tag = TAG
+        )
+    } catch (e: CommandException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not create YubiKey-backed entry due to YubiKey command error",
+            reason = CreateEntryReason.YubiKeyError,
+            tag = TAG
+        )
+    } catch (e: IOException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not create YubiKey-backed entry due to I/O error",
+            reason = CreateEntryReason.YubiKeyError,
+            tag = TAG
+        )
+    } catch (e: YubiKeyOathCredentialNotFoundError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not create YubiKey-backed entry: credential not found",
+            reason = CreateEntryReason.YubiKeyError,
             tag = TAG
         )
     } catch (e: AuthenticatorException.InvalidName) {
@@ -59,6 +112,13 @@ internal class CreateEntryCommandHandler @Inject constructor(
         ErrorLoggingUtils.logAndReturnFailure(
             throwable = e,
             message = "Could not create entry due to invalid secret",
+            reason = CreateEntryReason.InvalidEntrySecret,
+            tag = TAG
+        )
+    } catch (e: IllegalArgumentException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not create entry due to invalid secret format",
             reason = CreateEntryReason.InvalidEntrySecret,
             tag = TAG
         )

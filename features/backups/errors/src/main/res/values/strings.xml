@@ -18,7 +18,15 @@
 
 <resources>
     <string name="backup_error_dialog_title">Backup failed</string>
-    <string name="backup_error_dialog_message_error_folder">The specified backup folder could not be found.</string>
+    <string name="backup_error_dialog_message_error_folder">The specified backup folder could not be found or the file name is missing.</string>
     <string name="backup_error_dialog_message_error_unknown">Backup cannot be saved in the specified folder.</string>
     <string name="backup_error_dialog_message_error_suggestion">Please, enable backup, select the desired folder and try again.</string>
+    <string name="backup_error_dialog_message_error_password">A valid encryption password is required to create a backup.</string>
+    <string name="backup_error_dialog_message_error_password_suggestion">Please set a backup encryption password and try again.</string>
+    <string name="backup_error_dialog_message_error_no_entries">There are no exportable entries to back up.</string>
+    <string name="backup_error_dialog_message_error_no_entries_suggestion">Add at least one account before creating a backup.</string>
+    <string name="backup_error_dialog_message_error_file_permission">The backup file could not be created due to file permission or storage access issues.</string>
+    <string name="backup_error_dialog_message_error_file_permission_suggestion">Please verify that folder permissions are granted and select a writable directory.</string>
+    <string name="backup_error_dialog_message_error_hardware_backed">Hardware-backed credentials (YubiKey) cannot be backed up because secret keys never leave the hardware device.</string>
+    <string name="backup_error_dialog_message_error_not_enabled">Backups are currently disabled.</string>
 </resources>

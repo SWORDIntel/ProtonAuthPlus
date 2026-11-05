@@ -18,4 +18,8 @@
 
 <resources>
     <string name="home_scan_enter_manually">Enter manually</string>
+    <string name="home_scan_yubikey_timeout_error">YubiKey operation timed out. Please insert or tap your key and try again.</string>
+    <string name="home_scan_yubikey_locked_error">YubiKey OATH is locked. Please unlock your key and try again.</string>
+    <string name="home_scan_yubikey_storage_full_error">YubiKey storage is full. Please remove unused credentials to free up space.</string>
+    <string name="home_scan_yubikey_generic_error">There was an error writing to the YubiKey</string>
 </resources>

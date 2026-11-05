@@ -40,6 +40,13 @@ internal class DeleteEntryCommandHandler @Inject constructor(
             reason = DeleteEntryReason.EntryNotFound,
             tag = TAG
         )
+    } catch (e: NoSuchElementException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not delete entry due to entry not found",
+            reason = DeleteEntryReason.EntryNotFound,
+            tag = TAG
+        )
     }
 
     private companion object {

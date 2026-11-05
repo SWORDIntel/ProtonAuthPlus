@@ -18,18 +18,24 @@
 
 package proton.android.authenticator.features.home.master.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import proton.android.authenticator.features.home.master.R
 import proton.android.authenticator.features.home.master.presentation.HomeMasterEntryModel
 import proton.android.authenticator.shared.common.domain.constants.CharacterConstants
@@ -42,6 +48,7 @@ import proton.android.authenticator.shared.ui.domain.models.UiText
 import proton.android.authenticator.shared.ui.domain.models.UiTextMask
 import proton.android.authenticator.shared.ui.domain.theme.Theme
 import proton.android.authenticator.shared.ui.domain.theme.ThemePadding
+import proton.android.authenticator.shared.ui.domain.theme.ThemeRadius
 import proton.android.authenticator.shared.ui.domain.theme.ThemeShadow
 import proton.android.authenticator.shared.ui.domain.theme.ThemeSpacing
 import proton.android.authenticator.shared.ui.R as uiR
@@ -80,21 +87,32 @@ internal fun HomeEntryCard(
                     .fillMaxWidth()
                     .weight(weight = 1f, fill = true)
             ) {
-                HighlightText(
-                    text = entryModel.issuer.ifEmpty {
-                        stringResource(id = R.string.home_entries_no_issuer)
-                    },
-                    textColor = Theme.colorScheme.textNorm,
-                    textStyle = if (showTextShadows) {
-                        Theme.typography.body1Regular.copy(shadow = ThemeShadow.TextDefault)
-                    } else {
-                        Theme.typography.body1Regular
-                    },
-                    highlightedText = searchQuery,
-                    highlightedTextColor = Theme.colorScheme.accent,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(space = ThemeSpacing.ExtraSmall),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HighlightText(
+                        modifier = Modifier.weight(weight = 1f, fill = false),
+                        text = entryModel.issuer.ifEmpty {
+                            stringResource(id = R.string.home_entries_no_issuer)
+                        },
+                        textColor = Theme.colorScheme.textNorm,
+                        textStyle = if (showTextShadows) {
+                            Theme.typography.body1Regular.copy(shadow = ThemeShadow.TextDefault)
+                        } else {
+                            Theme.typography.body1Regular
+                        },
+                        highlightedText = searchQuery,
+                        highlightedTextColor = Theme.colorScheme.accent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    if (entryModel.isHardwareBacked) {
+                        HardwareBadge()
+                    }
+                }
 
                 HighlightText(
                     text = entryModel.name,
@@ -198,5 +216,35 @@ internal fun HomeEntryCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun HardwareBadge(
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .background(
+                color = Theme.colorScheme.purpleAlpha25,
+                shape = RoundedCornerShape(size = ThemeRadius.ExtraSmall)
+            )
+            .padding(horizontal = ThemePadding.ExtraSmall, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(space = ThemeSpacing.ExtraSmall),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            painter = painterResource(id = uiR.drawable.ic_key),
+            contentDescription = null,
+            tint = Theme.colorScheme.accent,
+            modifier = Modifier.size(size = 12.dp)
+        )
+
+        Text(
+            text = stringResource(id = R.string.home_entries_hardware_badge),
+            color = Theme.colorScheme.accent,
+            style = Theme.typography.captionRegular,
+            maxLines = 1
+        )
     }
 }

@@ -135,7 +135,6 @@ internal abstract class BusinessSharedPersistenceModule {
                 name = AuthenticatorDatabase.NAME
             )
                 .addMigrations(*AuthenticatorDatabase.ManualMigrations)
-                .fallbackToDestructiveMigration()
                 .build()
 
         @[Provides Singleton]

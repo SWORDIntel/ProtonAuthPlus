@@ -72,6 +72,10 @@ fun VariantDimension.setAssetLinksResValue(host: String) {
 }
 
 android {
+    androidResources {
+        localeFilters += listOf("en")
+    }
+
     defaultConfig {
         buildConfigField("String", "SENTRY_DSN", sentryDSN.toBuildConfigValue())
         setAssetLinksResValue("proton.me")
@@ -110,7 +114,6 @@ android {
         create("dev") {
             dimension = "version"
             isDefault = true
-            resourceConfigurations.addAll(listOf("en", "xxhdpi"))
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
         }

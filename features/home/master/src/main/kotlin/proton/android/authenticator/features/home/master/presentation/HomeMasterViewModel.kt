@@ -49,6 +49,7 @@ import proton.android.authenticator.business.applock.domain.AppLockState
 import proton.android.authenticator.business.backups.domain.Backup
 import proton.android.authenticator.business.backups.domain.BackupFrequencyType
 import proton.android.authenticator.business.entries.application.syncall.SyncEntriesReason
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.business.settings.domain.Settings
 import proton.android.authenticator.business.settings.domain.SettingsAppLockType
 import proton.android.authenticator.business.settings.domain.SettingsSortingType
@@ -180,7 +181,11 @@ internal class HomeMasterViewModel @Inject constructor(
                     entries.zip(entryCodes).associate { (entry, code) -> entry.uri to code }
                 sortedEntries.mapNotNull { entry ->
                     uriToCodeMap[entry.uri]?.let { code ->
-                        HomeMasterEntryModel(entry, code)
+                        HomeMasterEntryModel(
+                            entryModel = entry,
+                            entryCode = code,
+                            isHardwareBacked = entry.credentialBackend is EntryCredentialBackend.YubiKeyOath
+                        )
                     }
                 }.associateBy { entryModel -> entryModel.id }
             }

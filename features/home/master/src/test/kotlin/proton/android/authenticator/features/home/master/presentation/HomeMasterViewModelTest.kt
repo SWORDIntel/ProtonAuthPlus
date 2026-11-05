@@ -32,11 +32,13 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import proton.android.authenticator.business.applock.domain.AppLockState
 import proton.android.authenticator.business.entries.domain.EntryAlgorithm
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.business.entries.domain.EntryType
 import proton.android.authenticator.business.entrycodes.domain.EntryCode
 import proton.android.authenticator.business.settings.domain.Settings
@@ -92,6 +94,7 @@ internal class HomeMasterViewModelTest {
             timeProvider = timeProvider,
             observeBackupUseCase = observeBackupUseCase,
             updateBackupUseCase = mockk(relaxed = true),
+            updateSettingsUseCase = mockk(relaxed = true),
             observeAppLockStateUseCase = observeAppLockStateUseCase
         )
     }
@@ -118,6 +121,7 @@ internal class HomeMasterViewModelTest {
         val ready = state as HomeMasterState.Ready
         assertEquals(2, ready.entryModels.size)
         assertEquals(listOf("1", "2"), ready.entryModels.map { it.id })
+        assertEquals(listOf(false, false), ready.entryModels.map { it.isHardwareBacked })
     }
 
     @Test
@@ -222,6 +226,40 @@ internal class HomeMasterViewModelTest {
         )
     }
 
+    @Test
+    fun `isHardwareBacked is correctly mapped based on entry credential backend`() = runTest {
+        backgroundScope.launch(testDispatcher) { viewModel.stateFlow.collect {} }
+
+        val softwareEntry = createEntryModel("1", credentialBackend = EntryCredentialBackend.LocalEncrypted)
+        val hardwareEntry = createEntryModel(
+            "2",
+            credentialBackend = EntryCredentialBackend.YubiKeyOath(
+                credentialId = "yubi-2",
+                deviceId = "dev-1",
+                name = "Entry 2",
+                issuer = "Issuer 2",
+                note = null,
+                period = 30,
+                algorithm = EntryAlgorithm.SHA1,
+                digits = 6
+            )
+        )
+        val entries = listOf(softwareEntry, hardwareEntry)
+        val codes = listOf(createEntryCode("code1"), createEntryCode("code2"))
+
+        entryModelsFlow.emit(entries)
+        emitCodesFor(entries, codes)
+        testScheduler.advanceTimeBy(2_000)
+        testScheduler.runCurrent()
+
+        val state = viewModel.stateFlow.value as HomeMasterState.Ready
+        val entry1 = state.entryModel("1")
+        val entry2 = state.entryModel("2")
+
+        assertFalse("Entry 1 should not be hardware backed", entry1?.isHardwareBacked == true)
+        assertTrue("Entry 2 should be hardware backed", entry2?.isHardwareBacked == true)
+    }
+
     private fun emitCodesFor(entries: List<EntryModel>, codes: List<EntryCode>) {
         val uris = entries.map(EntryModel::uri)
         val flow = entryCodesFlows.getOrPut(uris) { MutableSharedFlow(replay = 1) }
@@ -230,7 +268,10 @@ internal class HomeMasterViewModelTest {
 
     private companion object {
 
-        fun createEntryModel(id: String) = EntryModel(
+        fun createEntryModel(
+            id: String,
+            credentialBackend: EntryCredentialBackend = EntryCredentialBackend.LocalEncrypted
+        ) = EntryModel(
             id = id,
             name = "Entry $id",
             issuer = "Issuer $id",
@@ -246,7 +287,8 @@ internal class HomeMasterViewModelTest {
             createdAt = id.toLong(),
             modifiedAt = id.toLong(),
             isDeleted = false,
-            isSynced = true
+            isSynced = true,
+            credentialBackend = credentialBackend
         )
 
         fun createEntryCode(code: String) = EntryCode(

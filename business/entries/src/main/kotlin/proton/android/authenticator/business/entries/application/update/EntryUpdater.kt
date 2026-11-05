@@ -24,6 +24,7 @@ import proton.android.authenticator.business.entries.domain.EntriesRepository
 import proton.android.authenticator.business.entries.domain.Entry
 import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.AuthenticatorEntryModel
+import proton.android.authenticator.AuthenticatorEntryTotpCreateParameters
 import proton.android.authenticator.commonrust.AuthenticatorMobileClientInterface
 import proton.android.authenticator.shared.common.domain.providers.TimeProvider
 import proton.android.authenticator.shared.crypto.domain.contexts.EncryptionContextProvider
@@ -43,35 +44,58 @@ internal class EntryUpdater @Inject constructor(
         position: Int,
         model: AuthenticatorEntryModel
     ) {
-        authenticatorClient.serializeEntry(model)
-            .let { decryptedModelContent ->
-                encryptionContextProvider.withEncryptionContext {
-                    encrypt(decryptedModelContent, EncryptionTag.EntryContent)
-                }
-            }
-            .let { encryptedContent ->
-                Entry(
-                    id = id,
-                    content = encryptedContent,
-                    createdAt = repository.find(id = id).first().createdAt,
+        val existingEntry = repository.find(id = id).first()
+        val updatedEntry = when (val backend = existingEntry.credentialBackend) {
+            is EntryCredentialBackend.YubiKeyOath -> {
+                existingEntry.copy(
                     modifiedAt = timeProvider.currentSeconds(),
-                    isDeleted = false,
+                    isSynced = false,
+                    position = position,
+                    credentialBackend = backend.copy(
+                        name = model.name,
+                        issuer = model.issuer,
+                        note = model.note
+                    )
+                )
+            }
+            EntryCredentialBackend.LocalEncrypted -> {
+                val encryptedContent = authenticatorClient.serializeEntry(model)
+                    .let { decryptedModelContent ->
+                        encryptionContextProvider.withEncryptionContext {
+                            encrypt(decryptedModelContent, EncryptionTag.EntryContent)
+                        }
+                    }
+                existingEntry.copy(
+                    content = encryptedContent,
+                    modifiedAt = timeProvider.currentSeconds(),
                     isSynced = false,
                     position = position
                 )
             }
-            .also { updatedEntry ->
-                repository.save(updatedEntry)
-            }
+        }
+        repository.save(updatedEntry)
     }
 
     internal suspend fun migrateToYubiKeyTotp(command: UpdateEntryCommand.ToYubiKeyTotp) {
         val existingEntry = repository.find(id = command.id).first()
-        require(existingEntry.credentialBackend == EntryCredentialBackend.LocalEncrypted) {
+        check(existingEntry.credentialBackend == EntryCredentialBackend.LocalEncrypted) {
             "Only local encrypted entries can be migrated to YubiKey"
         }
 
         val writeResult = yubiKeyOathCredentialWriter.write(command.toCreateCommand())
+
+        val currentTimestamp = timeProvider.currentSeconds()
+        val localCode = generateLocalTotpCode(existingEntry, command, currentTimestamp)
+        val yubiKeyCode = yubiKeyOathCredentialWriter.calculateCode(
+            credentialId = writeResult.credentialId,
+            timestampSeconds = currentTimestamp
+        )
+
+        if (localCode != yubiKeyCode) {
+            throw YubiKeyVerificationFailedException(
+                "Local TOTP code ($localCode) does not match YubiKey TOTP code ($yubiKeyCode)"
+            )
+        }
 
         encryptionContextProvider.withEncryptionContext {
             encrypt(ByteArray(size = 0), EncryptionTag.EntryContent)
@@ -79,7 +103,7 @@ internal class EntryUpdater @Inject constructor(
             .let { encryptedContent ->
                 existingEntry.copy(
                     content = encryptedContent,
-                    modifiedAt = timeProvider.currentSeconds(),
+                    modifiedAt = currentTimestamp,
                     isSynced = false,
                     position = command.position,
                     credentialBackend = EntryCredentialBackend.YubiKeyOath(
@@ -97,6 +121,38 @@ internal class EntryUpdater @Inject constructor(
             .also { updatedEntry ->
                 repository.save(updatedEntry)
             }
+    }
+
+    private suspend fun generateLocalTotpCode(
+        existingEntry: Entry,
+        command: UpdateEntryCommand.ToYubiKeyTotp,
+        timestampSeconds: Long
+    ): String {
+        val entryModel = runCatching {
+            val decryptedBytes = encryptionContextProvider.withEncryptionContext {
+                decrypt(existingEntry.content, EncryptionTag.EntryContent)
+            }
+            authenticatorClient.deserializeEntry(decryptedBytes)
+        }.getOrElse {
+            authenticatorClient.newTotpEntryFromParams(
+                params = AuthenticatorEntryTotpCreateParameters(
+                    name = command.name,
+                    secret = command.secret,
+                    issuer = command.issuer,
+                    period = command.period.toUShort(),
+                    digits = command.digits.toUByte(),
+                    algorithm = command.algorithm.asAuthenticatorEntryAlgorithm(),
+                    note = command.note
+                )
+            )
+        }
+
+        val generatedCodes = authenticatorClient.generateCodes(
+            entries = listOf(entryModel),
+            time = timestampSeconds.toULong()
+        )
+        return generatedCodes.firstOrNull()?.currentCode
+            ?: throw IllegalStateException("Failed to generate local TOTP code")
     }
 
 }

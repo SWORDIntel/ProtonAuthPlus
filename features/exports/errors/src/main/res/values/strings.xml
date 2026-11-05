@@ -18,5 +18,10 @@
 
 <resources>
     <string name="exports_error_dialog_title">Export failed</string>
-    <string name="exports_error_dialog_message_error">The was an error during the export.</string>
+    <string name="exports_error_dialog_message_error">An error occurred during export.</string>
+    <string name="exports_error_dialog_message_password">A valid encryption password is required to export your entries.</string>
+    <string name="exports_error_dialog_message_no_entries">There are no exportable entries found to export.</string>
+    <string name="exports_error_dialog_message_file">Could not write to the export file. Please check file permissions and storage access, then try again.</string>
+    <string name="exports_error_dialog_message_hardware_backed">Hardware-backed entries cannot be exported because secret keys never leave the hardware device.</string>
+    <string name="exports_error_dialog_message_invalid_entries">An error occurred while preparing entries for export. Please verify your data and try again.</string>
 </resources>

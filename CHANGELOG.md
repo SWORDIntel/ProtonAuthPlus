@@ -2,9 +2,28 @@
 
 ### Features :tada:
 
+- YubiKey OATH: batch code calculation in a single USB session, with touch detection to avoid double-touch prompts.
+- YubiKey OATH: deleting a hardware-backed entry now frees its slot on the key.
+- YubiKey OATH: `YubiKey` badge on hardware-backed entries in the home list.
+- YubiKey OATH: busy state during key discovery and typed error messages (locked, timeout, storage full, generic error, verification failed).
+
 ### Fixes :bug:
 
+- `Move to YubiKey` now verifies the key's TOTP code against the local seed before erasing the local seed.
+- Editing a hardware-backed entry no longer strips the YubiKey backend and overwrites it with an empty secret.
+- Hardware-backed entries are no longer synced to Proton cloud with empty secrets.
+- Export and automatic backup skip hardware-backed entries instead of failing permanently.
+- Pasted Base32 secrets with spaces/dashes/lowercase are normalised; invalid secrets show an error instead of crashing.
+- A corrupt hardware row no longer crashes the entries list or stops observation of all entries.
+- Removed `fallbackToDestructiveMigration()` so a missing Room migration can no longer silently wipe local data.
+- `verifyFdroidProdRelease.sh` auto-detects the Android SDK and checks release signing up front.
+
 ### Other
+
+- Hardware entry name/issuer/note are encrypted at rest (`encrypted_content`); legacy plaintext rows are still read.
+- Removed the "export/backup without password" actions.
+- Declared optional `android.hardware.usb.host`; migrated to AGP 8.9 `androidResources.localeFilters`.
+- Added unit tests for entries, entry codes, deletion, persistence and home master.
 
 ## 1.3.7 (2026-03-27)
 

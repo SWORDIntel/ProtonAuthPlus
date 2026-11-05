@@ -78,8 +78,17 @@ use cases, especially runtime plaintext seed material in app memory.
 - The home screen presentation model no longer retains the full decrypted local
   entry model, avoiding an extra long-lived UI copy of local secrets and
   secret-bearing `otpauth://` URIs.
-- YubiKey-backed entries are excluded from export and backup because the phone
-  cannot and should not export their seeds.
+- YubiKey-backed entries are skipped during export and backup because the phone
+  cannot and should not export their seeds; backups of the remaining local
+  entries still succeed. They are also never synced to Proton cloud.
+- `Move to YubiKey` verifies that the YubiKey produces the same TOTP code as the
+  local seed before the local seed is erased.
+- Hardware entry metadata (name, issuer, note) is encrypted at rest in the Room
+  database instead of stored in plaintext columns.
+- Deleting a hardware-backed entry frees its OATH slot on the connected YubiKey.
+- All hardware codes are fetched in one USB session (OATH `CALCULATE ALL`).
+- Room no longer falls back to destructive migration, so a schema problem
+  cannot silently wipe your entries.
 - If the YubiKey is removed, hardware-backed codes fail closed and render blank
   placeholder codes instead of retaining stale valid OTPs.
 

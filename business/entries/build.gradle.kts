@@ -4,6 +4,10 @@ plugins {
 
 android {
     namespace = "proton.android.authenticator.business.entries"
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 androidComponents {
@@ -18,4 +22,8 @@ dependencies {
     implementation(libs.kotlinx.datetime)
     implementation(libs.yubikit.android)
     implementation(libs.yubikit.oath)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

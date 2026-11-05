@@ -34,6 +34,7 @@ internal data class HomeManualFormModel(
     internal val showAdvanceOptions: Boolean,
     internal val position: Int,
     internal val mode: HomeManualMode,
+    internal val isLoading: Boolean = false,
     private val isValidSecret: Boolean,
     private val isValidTitle: Boolean
 ) {
@@ -80,7 +81,7 @@ internal data class HomeManualFormModel(
     internal val canMigrateToYubiKey: Boolean = mode == HomeManualMode.Edit && type == EntryType.TOTP && !isHardwareBacked
 
     internal val isValid: Boolean =
-        secret.isNotBlank() && isValidSecret && title.isNotBlank() && isValidTitle
+        !isLoading && secret.isNotBlank() && isValidSecret && title.isNotBlank() && isValidTitle
 
     private companion object {
 

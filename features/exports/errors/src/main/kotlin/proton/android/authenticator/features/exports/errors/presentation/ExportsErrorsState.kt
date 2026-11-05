@@ -27,9 +27,11 @@ import proton.android.authenticator.shared.ui.domain.models.UiText
 internal class ExportsErrorsState private constructor(private val errorReason: ExportEntriesReason) {
 
     internal val errorText: UiText = when (errorReason) {
-        ExportEntriesReason.PasswordRequired,
-        ExportEntriesReason.HardwareBackedEntries,
-        ExportEntriesReason.InvalidEntries -> R.string.exports_error_dialog_message_error
+        ExportEntriesReason.PasswordRequired -> R.string.exports_error_dialog_message_password
+        ExportEntriesReason.NoEntries -> R.string.exports_error_dialog_message_no_entries
+        ExportEntriesReason.FileError -> R.string.exports_error_dialog_message_file
+        ExportEntriesReason.HardwareBackedEntries -> R.string.exports_error_dialog_message_hardware_backed
+        ExportEntriesReason.InvalidEntries -> R.string.exports_error_dialog_message_invalid_entries
     }.let(UiText::Resource)
 
     internal companion object {

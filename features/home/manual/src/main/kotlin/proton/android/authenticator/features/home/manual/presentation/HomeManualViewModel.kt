@@ -89,6 +89,8 @@ internal class HomeManualViewModel @Inject constructor(
 
     private val showAdvanceOptionsFlow = MutableStateFlow<Boolean?>(value = null)
 
+    private val isLoadingFlow = MutableStateFlow(value = false)
+
     private val formTextInputsFlow = combine(
         snapshotFlow { titleState.value },
         snapshotFlow { secretState.value },
@@ -111,13 +113,25 @@ internal class HomeManualViewModel @Inject constructor(
         ::HomeManualInputs
     )
 
+    private val formStatusFlow = combine(
+        showAdvanceOptionsFlow,
+        isValidSecretFlow,
+        isValidTitleFlow,
+        isLoadingFlow
+    ) { showAdvanceOptions, isValidSecret, isValidTitle, isLoading ->
+        FormStatus(
+            showAdvanceOptions = showAdvanceOptions == true,
+            isValidSecret = isValidSecret,
+            isValidTitle = isValidTitle,
+            isLoading = isLoading
+        )
+    }
+
     private val formModelFlow = combine(
         entryModelFlow,
         formInputsFlow,
-        showAdvanceOptionsFlow,
-        isValidSecretFlow,
-        isValidTitleFlow
-    ) { entryModel, formInputs, showAdvanceOptions, isValidSecret, isValidTitle ->
+        formStatusFlow
+    ) { entryModel, formInputs, formStatus ->
         if (entryModel == null) {
             HomeManualFormModel(
                 title = formInputs.title.orEmpty(),
@@ -130,9 +144,10 @@ internal class HomeManualViewModel @Inject constructor(
                 isYubiKeyBacked = formInputs.isYubiKeyBacked == true,
                 isHardwareBacked = false,
                 position = 0,
-                showAdvanceOptions = showAdvanceOptions == true,
-                isValidSecret = isValidSecret,
-                isValidTitle = isValidTitle,
+                showAdvanceOptions = formStatus.showAdvanceOptions,
+                isLoading = formStatus.isLoading,
+                isValidSecret = formStatus.isValidSecret,
+                isValidTitle = formStatus.isValidTitle,
                 mode = HomeManualMode.Create
             )
         } else {
@@ -147,9 +162,10 @@ internal class HomeManualViewModel @Inject constructor(
                 isYubiKeyBacked = false,
                 isHardwareBacked = entryModel.credentialBackend is EntryCredentialBackend.YubiKeyOath,
                 position = entryModel.position,
-                showAdvanceOptions = showAdvanceOptions == true,
-                isValidSecret = isValidSecret,
-                isValidTitle = isValidTitle,
+                showAdvanceOptions = formStatus.showAdvanceOptions,
+                isLoading = formStatus.isLoading,
+                isValidSecret = formStatus.isValidSecret,
+                isValidTitle = formStatus.isValidTitle,
                 mode = HomeManualMode.Edit
             )
         }
@@ -215,6 +231,7 @@ internal class HomeManualViewModel @Inject constructor(
     }
 
     internal fun onSubmitForm(formModel: HomeManualFormModel) {
+        if (isLoadingFlow.value) return
         if (entryId == null) {
             createEntry(formModel)
         } else {
@@ -223,37 +240,68 @@ internal class HomeManualViewModel @Inject constructor(
     }
 
     internal fun onMigrateToYubiKey(formModel: HomeManualFormModel) {
+        if (isLoadingFlow.value) return
         entryId?.also { id -> migrateToYubiKey(id, formModel) }
     }
 
     private fun createEntry(formModel: HomeManualFormModel) {
         viewModelScope.launch {
-            createEntryUseCase(formModel = formModel).also { answer ->
-                when (answer) {
-                    is Answer.Failure -> {
-                        when (answer.reason) {
-                            CreateEntryReason.CannotSaveEntry -> {
-                                dispatchSnackbarEvent(
-                                    messageResId = R.string.home_manual_snackbar_message_create_error
-                                )
-                            }
+            if (formModel.isYubiKeyBacked) {
+                isLoadingFlow.update { true }
+            }
+            try {
+                createEntryUseCase(formModel = formModel).also { answer ->
+                    when (answer) {
+                        is Answer.Failure -> {
+                            when (answer.reason) {
+                                CreateEntryReason.CannotSaveEntry -> {
+                                    dispatchSnackbarEvent(
+                                        messageResId = R.string.home_manual_snackbar_message_create_error
+                                    )
+                                }
 
-                            CreateEntryReason.InvalidEntryTitle -> {
-                                isValidTitleFlow.update { false }
-                            }
+                                CreateEntryReason.InvalidEntryTitle -> {
+                                    isValidTitleFlow.update { false }
+                                }
 
-                            CreateEntryReason.InvalidEntrySecret -> {
-                                isValidSecretFlow.update { false }
-                            }
+                                CreateEntryReason.InvalidEntrySecret -> {
+                                    isValidSecretFlow.update { false }
+                                }
 
-                            CreateEntryReason.Unknown -> Unit
+                                CreateEntryReason.YubiKeyLocked -> {
+                                    dispatchSnackbarEvent(
+                                        messageResId = R.string.home_manual_snackbar_message_yubikey_locked
+                                    )
+                                }
+
+                                CreateEntryReason.YubiKeyTimeout -> {
+                                    dispatchSnackbarEvent(
+                                        messageResId = R.string.home_manual_snackbar_message_yubikey_timeout
+                                    )
+                                }
+
+                                CreateEntryReason.YubiKeyStorageFull -> {
+                                    dispatchSnackbarEvent(
+                                        messageResId = R.string.home_manual_snackbar_message_yubikey_storage_full
+                                    )
+                                }
+
+                                CreateEntryReason.YubiKeyError,
+                                CreateEntryReason.Unknown -> {
+                                    dispatchSnackbarEvent(
+                                        messageResId = R.string.home_manual_snackbar_message_create_error
+                                    )
+                                }
+                            }
+                        }
+
+                        is Answer.Success -> {
+                            eventFlow.update { HomeManualEvent.OnEntryCreated }
                         }
                     }
-
-                    is Answer.Success -> {
-                        eventFlow.update { HomeManualEvent.OnEntryCreated }
-                    }
                 }
+            } finally {
+                isLoadingFlow.update { false }
             }
         }
     }
@@ -265,7 +313,8 @@ internal class HomeManualViewModel @Inject constructor(
                     is Answer.Failure -> {
                         when (answer.reason) {
                             UpdateEntryReason.EntryNotFound,
-                            UpdateEntryReason.Unknown -> {
+                            UpdateEntryReason.Unknown,
+                            UpdateEntryReason.YubiKeyError -> {
                                 dispatchSnackbarEvent(
                                     messageResId = R.string.home_manual_snackbar_message_update_error
                                 )
@@ -277,6 +326,30 @@ internal class HomeManualViewModel @Inject constructor(
 
                             UpdateEntryReason.InvalidEntryTitle -> {
                                 isValidTitleFlow.update { false }
+                            }
+
+                            UpdateEntryReason.YubiKeyLocked -> {
+                                dispatchSnackbarEvent(
+                                    messageResId = R.string.home_manual_snackbar_message_yubikey_locked
+                                )
+                            }
+
+                            UpdateEntryReason.YubiKeyTimeout -> {
+                                dispatchSnackbarEvent(
+                                    messageResId = R.string.home_manual_snackbar_message_yubikey_timeout
+                                )
+                            }
+
+                            UpdateEntryReason.YubiKeyStorageFull -> {
+                                dispatchSnackbarEvent(
+                                    messageResId = R.string.home_manual_snackbar_message_yubikey_storage_full
+                                )
+                            }
+
+                            UpdateEntryReason.VerificationFailed -> {
+                                dispatchSnackbarEvent(
+                                    messageResId = R.string.home_manual_snackbar_message_yubikey_verification_failed
+                                )
                             }
                         }
                     }
@@ -291,31 +364,61 @@ internal class HomeManualViewModel @Inject constructor(
 
     private fun migrateToYubiKey(entryId: String, formModel: HomeManualFormModel) {
         viewModelScope.launch {
-            updateEntryUseCase.migrateToYubiKey(entryId = entryId, formModel = formModel).also { answer ->
-                when (answer) {
-                    is Answer.Failure -> {
-                        when (answer.reason) {
-                            UpdateEntryReason.EntryNotFound,
-                            UpdateEntryReason.Unknown -> {
-                                dispatchSnackbarEvent(
-                                    messageResId = R.string.home_manual_snackbar_message_migrate_yubikey_error
-                                )
-                            }
+            isLoadingFlow.update { true }
+            try {
+                updateEntryUseCase.migrateToYubiKey(entryId = entryId, formModel = formModel).also { answer ->
+                    when (answer) {
+                        is Answer.Failure -> {
+                            when (answer.reason) {
+                                UpdateEntryReason.EntryNotFound,
+                                UpdateEntryReason.Unknown,
+                                UpdateEntryReason.YubiKeyError -> {
+                                    dispatchSnackbarEvent(
+                                        messageResId = R.string.home_manual_snackbar_message_migrate_yubikey_error
+                                    )
+                                }
 
-                            UpdateEntryReason.InvalidEntrySecret -> {
-                                isValidSecretFlow.update { false }
-                            }
+                                UpdateEntryReason.InvalidEntrySecret -> {
+                                    isValidSecretFlow.update { false }
+                                }
 
-                            UpdateEntryReason.InvalidEntryTitle -> {
-                                isValidTitleFlow.update { false }
+                                UpdateEntryReason.InvalidEntryTitle -> {
+                                    isValidTitleFlow.update { false }
+                                }
+
+                                UpdateEntryReason.YubiKeyLocked -> {
+                                    dispatchSnackbarEvent(
+                                        messageResId = R.string.home_manual_snackbar_message_yubikey_locked
+                                    )
+                                }
+
+                                UpdateEntryReason.YubiKeyTimeout -> {
+                                    dispatchSnackbarEvent(
+                                        messageResId = R.string.home_manual_snackbar_message_yubikey_timeout
+                                    )
+                                }
+
+                                UpdateEntryReason.YubiKeyStorageFull -> {
+                                    dispatchSnackbarEvent(
+                                        messageResId = R.string.home_manual_snackbar_message_yubikey_storage_full
+                                    )
+                                }
+
+                                UpdateEntryReason.VerificationFailed -> {
+                                    dispatchSnackbarEvent(
+                                        messageResId = R.string.home_manual_snackbar_message_yubikey_verification_failed
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    is Answer.Success -> {
-                        eventFlow.update { HomeManualEvent.OnEntryUpdated }
+                        is Answer.Success -> {
+                            eventFlow.update { HomeManualEvent.OnEntryUpdated }
+                        }
                     }
                 }
+            } finally {
+                isLoadingFlow.update { false }
             }
         }
     }
@@ -326,6 +429,13 @@ internal class HomeManualViewModel @Inject constructor(
                 .also { event -> dispatchSnackbarEventUseCase(snackbarEvent = event) }
         }
     }
+
+    private data class FormStatus(
+        val showAdvanceOptions: Boolean,
+        val isValidSecret: Boolean,
+        val isValidTitle: Boolean,
+        val isLoading: Boolean
+    )
 
     private companion object {
 

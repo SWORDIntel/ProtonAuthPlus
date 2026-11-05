@@ -27,21 +27,31 @@ import proton.android.authenticator.shared.ui.domain.models.UiText
 internal data class BackupsErrorsState(private val errorReason: GenerateBackupReason) {
 
     internal val messageTexts: List<UiText> = buildList {
-        when (errorReason) {
-            GenerateBackupReason.CannotGenerate,
-            GenerateBackupReason.NoEntries,
-            GenerateBackupReason.NotEnabled,
-            GenerateBackupReason.PasswordRequired,
-            GenerateBackupReason.HardwareBackedEntries -> R.string.backup_error_dialog_message_error_unknown
+        val (errorResId, suggestionResId) = when (errorReason) {
+            GenerateBackupReason.PasswordRequired ->
+                R.string.backup_error_dialog_message_error_password to R.string.backup_error_dialog_message_error_password_suggestion
 
-            GenerateBackupReason.MissingFileName,
-            GenerateBackupReason.FileCreationFailed -> R.string.backup_error_dialog_message_error_folder
+            GenerateBackupReason.NoEntries ->
+                R.string.backup_error_dialog_message_error_no_entries to R.string.backup_error_dialog_message_error_no_entries_suggestion
+
+            GenerateBackupReason.FileCreationFailed ->
+                R.string.backup_error_dialog_message_error_file_permission to R.string.backup_error_dialog_message_error_file_permission_suggestion
+
+            GenerateBackupReason.HardwareBackedEntries ->
+                R.string.backup_error_dialog_message_error_hardware_backed to R.string.backup_error_dialog_message_error_suggestion
+
+            GenerateBackupReason.MissingFileName ->
+                R.string.backup_error_dialog_message_error_folder to R.string.backup_error_dialog_message_error_suggestion
+
+            GenerateBackupReason.NotEnabled ->
+                R.string.backup_error_dialog_message_error_not_enabled to R.string.backup_error_dialog_message_error_suggestion
+
+            GenerateBackupReason.CannotGenerate ->
+                R.string.backup_error_dialog_message_error_unknown to R.string.backup_error_dialog_message_error_suggestion
         }
-            .let(UiText::Resource)
-            .also(::add)
 
-        UiText.Resource(id = R.string.backup_error_dialog_message_error_suggestion)
-            .also(::add)
+        add(UiText.Resource(id = errorResId))
+        add(UiText.Resource(id = suggestionResId))
     }
 
 }

@@ -19,6 +19,7 @@
 package proton.android.authenticator.features.home.scan.presentation
 
 import android.net.Uri
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,14 +30,20 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import proton.android.authenticator.business.entries.application.create.CreateEntryReason
+import proton.android.authenticator.features.home.scan.R
 import proton.android.authenticator.features.home.scan.usecases.CreateEntryUseCase
 import proton.android.authenticator.features.home.scan.usecases.ScanEntryQrUseCase
+import proton.android.authenticator.features.shared.usecases.snackbars.DispatchSnackbarEventUseCase
+import proton.android.authenticator.shared.common.domain.answers.Answer
+import proton.android.authenticator.shared.common.domain.models.SnackbarEvent
 import javax.inject.Inject
 
 @HiltViewModel
 internal class HomeScanViewModel @Inject constructor(
     private val createEntryUseCase: CreateEntryUseCase,
-    private val scanEntryQrUseCase: ScanEntryQrUseCase
+    private val scanEntryQrUseCase: ScanEntryQrUseCase,
+    private val dispatchSnackbarEventUseCase: DispatchSnackbarEventUseCase
 ) : ViewModel() {
 
     private val hasCameraPermissionFlow = MutableStateFlow<Boolean?>(value = null)
@@ -70,12 +77,41 @@ internal class HomeScanViewModel @Inject constructor(
 
     internal fun onCreateEntry(uri: String) {
         viewModelScope.launch {
-            createEntryUseCase(uri = uri, isYubiKeyBacked = isYubiKeyBackedFlow.value)
-                .fold(
-                    onFailure = { HomeScanEvent.OnEntryCreationFailed },
-                    onSuccess = { HomeScanEvent.OnEntryCreationSucceeded }
-                )
-                .also { event -> eventFlow.update { event } }
+            when (val answer = createEntryUseCase(uri = uri, isYubiKeyBacked = isYubiKeyBackedFlow.value)) {
+                is Answer.Success -> {
+                    eventFlow.update { HomeScanEvent.OnEntryCreationSucceeded }
+                }
+
+                is Answer.Failure -> {
+                    when (answer.reason) {
+                        CreateEntryReason.YubiKeyTimeout -> {
+                            dispatchSnackbarEvent(R.string.home_scan_yubikey_timeout_error)
+                        }
+
+                        CreateEntryReason.YubiKeyLocked -> {
+                            dispatchSnackbarEvent(R.string.home_scan_yubikey_locked_error)
+                        }
+
+                        CreateEntryReason.YubiKeyStorageFull -> {
+                            dispatchSnackbarEvent(R.string.home_scan_yubikey_storage_full_error)
+                        }
+
+                        CreateEntryReason.YubiKeyError -> {
+                            dispatchSnackbarEvent(R.string.home_scan_yubikey_generic_error)
+                        }
+
+                        else -> {
+                            eventFlow.update { HomeScanEvent.OnEntryCreationFailed }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun dispatchSnackbarEvent(@StringRes messageResId: Int) {
+        viewModelScope.launch {
+            dispatchSnackbarEventUseCase(snackbarEvent = SnackbarEvent(messageResId = messageResId))
         }
     }
 

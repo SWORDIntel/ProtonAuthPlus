@@ -20,16 +20,21 @@ package proton.android.authenticator.features.home.manual.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import proton.android.authenticator.business.entries.domain.EntryAlgorithm
 import proton.android.authenticator.business.entries.domain.EntryType
 import proton.android.authenticator.features.home.manual.R
@@ -97,29 +102,67 @@ internal fun HomeManualTotpForm(
                 titleText = UiText.Resource(id = R.string.home_manual_form_yubikey_backend_title),
                 descriptionText = UiText.Resource(id = R.string.home_manual_form_yubikey_backend_description),
                 isChecked = isYubiKeyBacked,
-                onCheckedChange = onYubiKeyBackedChange
+                onCheckedChange = { if (!isLoading) onYubiKeyBackedChange(it) }
             )
+        }
+
+        if (isLoading && isYubiKeyBacked) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = ThemePadding.Small),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(size = ThemeSpacing.Large),
+                    color = Theme.colorScheme.accent,
+                    strokeWidth = 2.dp
+                )
+
+                Text(
+                    modifier = Modifier.padding(start = ThemeSpacing.Small),
+                    text = stringResource(id = R.string.home_manual_yubikey_waiting),
+                    style = Theme.typography.body1Regular,
+                    color = Theme.colorScheme.accent
+                )
+            }
         }
 
         if (canMigrateToYubiKey) {
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = { onMigrateToYubiKey(formModel) },
+                enabled = !isLoading,
                 colors = ButtonDefaults.buttonColors().copy(
                     containerColor = Theme.colorScheme.aux,
                     contentColor = Theme.colorScheme.white
                 )
             ) {
-                Icon(
-                    painter = painterResource(id = uiR.drawable.ic_key),
-                    contentDescription = null
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(size = ThemeSpacing.Large),
+                        color = Theme.colorScheme.white,
+                        strokeWidth = 2.dp
+                    )
 
-                Text(
-                    modifier = Modifier.padding(start = ThemeSpacing.Small),
-                    text = stringResource(id = R.string.home_manual_form_migrate_yubikey_action),
-                    style = Theme.typography.body1Regular
-                )
+                    Text(
+                        modifier = Modifier.padding(start = ThemeSpacing.Small),
+                        text = stringResource(id = R.string.home_manual_yubikey_waiting),
+                        style = Theme.typography.body1Regular
+                    )
+                } else {
+                    Icon(
+                        painter = painterResource(id = uiR.drawable.ic_key),
+                        contentDescription = null
+                    )
+
+                    Text(
+                        modifier = Modifier.padding(start = ThemeSpacing.Small),
+                        text = stringResource(id = R.string.home_manual_form_migrate_yubikey_action),
+                        style = Theme.typography.body1Regular
+                    )
+                }
             }
         }
 
