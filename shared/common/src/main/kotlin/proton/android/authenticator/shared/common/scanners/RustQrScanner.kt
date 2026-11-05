@@ -19,7 +19,16 @@
 package proton.android.authenticator.shared.common.scanners
 
 import android.content.ContentResolver
+import android.graphics.BitmapFactory
 import android.net.Uri
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.BinaryBitmap
+import com.google.zxing.DecodeHintType
+import com.google.zxing.MultiFormatReader
+import com.google.zxing.RGBLuminanceSource
+import com.google.zxing.ReaderException
+import com.google.zxing.common.GlobalHistogramBinarizer
+import com.google.zxing.common.HybridBinarizer
 import kotlinx.coroutines.withContext
 import proton.android.authenticator.commonrust.QrCodeScannerInterface
 import proton.android.authenticator.shared.common.domain.dispatchers.AppDispatchers
@@ -55,8 +64,49 @@ internal class RustQrScanner @Inject constructor(
     }
 
     override suspend fun scan(bytes: ByteArray): String? = withContext(appDispatchers.default) {
-        qrCodeScanner.scanQrCode(image = bytes)
+        val textCandidate = runCatching { bytes.toString(Charsets.UTF_8).trim() }.getOrNull()
+        if (textCandidate != null && (
+            textCandidate.startsWith("otpauth-migration://", ignoreCase = true) ||
+            textCandidate.startsWith("otpauth://", ignoreCase = true)
+        )) {
+            return@withContext textCandidate
+        }
+
+        val rustResult = qrCodeScanner.scanQrCode(image = bytes)
+        if (!rustResult.isNullOrBlank()) {
+            return@withContext rustResult
+        }
+        decodeWithZxing(bytes)
     }
+
+    private fun decodeWithZxing(bytes: ByteArray): String? = runCatching {
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@runCatching null
+        val width = bitmap.width
+        val height = bitmap.height
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        val source = RGBLuminanceSource(width, height, pixels)
+        val reader = MultiFormatReader().apply {
+            setHints(
+                mapOf(
+                    DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
+                    DecodeHintType.TRY_HARDER to true,
+                    DecodeHintType.ALSO_INVERTED to true
+                )
+            )
+        }
+        try {
+            reader.decodeWithState(BinaryBitmap(HybridBinarizer(source))).text
+        } catch (_: ReaderException) {
+            try {
+                reader.decodeWithState(BinaryBitmap(GlobalHistogramBinarizer(source))).text
+            } catch (_: ReaderException) {
+                null
+            }
+        } finally {
+            reader.reset()
+        }
+    }.getOrNull()
 
     private companion object {
 

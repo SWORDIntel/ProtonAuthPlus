@@ -57,10 +57,16 @@ internal class EntriesImporter @Inject constructor(
         importType: EntryImportType
     ): List<AuthenticatorEntryModel> = when (importType) {
         EntryImportType.Google -> {
-            qrScanner.scan(bytes = contentBytes.toByteArray())
-                .orEmpty()
-                .let(authenticatorImporter::importFromGoogleQr)
-                .entries
+            val bytes = contentBytes.toByteArray()
+            val textContent = runCatching { bytes.toString(Charsets.UTF_8).trim() }.getOrNull().orEmpty()
+            val qrText = if (textContent.startsWith("otpauth-migration://", ignoreCase = true) ||
+                textContent.startsWith("otpauth://", ignoreCase = true)
+            ) {
+                textContent
+            } else {
+                qrScanner.scan(bytes = bytes).orEmpty()
+            }
+            parseGoogleExportContent(qrText)
         }
 
         EntryImportType.Aegis,
@@ -94,7 +100,14 @@ internal class EntriesImporter @Inject constructor(
             EntryImportType.ProtonPass ->
                 contentBinary = fileReader.readBinary(contentUri.toString(), MAX_ZIP_SIZE)
 
-            EntryImportType.Google -> content = qrScanner.scan(contentUri).orEmpty()
+            EntryImportType.Google -> {
+                val textCandidate = runCatching { fileReader.readText(contentUri.toString()) }.getOrNull()
+                if (textCandidate != null && (textCandidate.contains("otpauth-migration://") || textCandidate.contains("otpauth://"))) {
+                    content = textCandidate
+                } else {
+                    content = qrScanner.scan(contentUri).orEmpty()
+                }
+            }
 
             else -> content = fileReader.readText(contentUri.toString())
         }
@@ -108,8 +121,14 @@ internal class EntriesImporter @Inject constructor(
         content: String,
         contentBinary: ByteArray,
         password: String?
-    ) = withContext(appDispatchers.default) {
+    ): List<AuthenticatorEntryModel> = withContext(appDispatchers.default) {
+        if (importType == EntryImportType.Google) {
+            return@withContext parseGoogleExportContent(content)
+        }
+
         when (importType) {
+            EntryImportType.Google -> error("Handled above")
+
             EntryImportType.Aegis -> {
                 authenticatorImporter.importFromAegisJson(content, password)
             }
@@ -134,10 +153,6 @@ internal class EntriesImporter @Inject constructor(
 
             EntryImportType.Ente -> {
                 authenticatorImporter.importFromEnteTxt(content)
-            }
-
-            EntryImportType.Google -> {
-                authenticatorImporter.importFromGoogleQr(content)
             }
 
             EntryImportType.LastPass -> {
@@ -173,6 +188,65 @@ internal class EntriesImporter @Inject constructor(
             }
             result.entries
         }
+    }
+
+    private fun parseGoogleExportContent(content: String): List<AuthenticatorEntryModel> {
+        val trimmed = content.trim()
+        if (trimmed.isEmpty()) {
+            return authenticatorImporter.importFromGoogleQr("").entries
+        }
+
+        val lines = trimmed.lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
+        val entries = mutableListOf<AuthenticatorEntryModel>()
+        var foundAnyValid = false
+
+        for (line in lines) {
+            when {
+                line.startsWith("otpauth-migration://", ignoreCase = true) -> {
+                    foundAnyValid = true
+                    val result = authenticatorImporter.importFromGoogleQr(line)
+                    if (result.errors.isNotEmpty()) {
+                        AuthenticatorLogger.w(TAG, "Found ${result.errors.size} errors on import from Google QR")
+                        for (error in result.errors) {
+                            AuthenticatorLogger.w(TAG, "Import error: [context=${error.context}] [message=${error.message}]")
+                        }
+                    }
+                    entries.addAll(result.entries)
+                }
+
+                line.startsWith("otpauth://", ignoreCase = true) -> {
+                    foundAnyValid = true
+                    runCatching {
+                        authenticatorClient.entryFromUri(line)
+                    }.onSuccess { model ->
+                        entries.add(model)
+                    }.onFailure { error ->
+                        AuthenticatorLogger.w(TAG, error, "Failed to parse otpauth URI: $line")
+                    }
+                }
+
+                else -> {
+                    val result = authenticatorImporter.importFromGoogleQr(line)
+                    foundAnyValid = true
+                    if (result.errors.isNotEmpty()) {
+                        AuthenticatorLogger.w(TAG, "Found ${result.errors.size} errors on import from Google QR")
+                        for (error in result.errors) {
+                            AuthenticatorLogger.w(TAG, "Import error: [context=${error.context}] [message=${error.message}]")
+                        }
+                    }
+                    entries.addAll(result.entries)
+                }
+            }
+        }
+
+        if (!foundAnyValid && entries.isEmpty()) {
+            return authenticatorImporter.importFromGoogleQr(trimmed).entries
+        }
+
+        return entries
     }
 
     private suspend fun saveEntries(entryModels: List<AuthenticatorEntryModel>): Int {

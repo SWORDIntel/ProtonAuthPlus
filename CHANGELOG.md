@@ -2,6 +2,7 @@
 
 ### Features :tada:
 
+- Complete Google Authenticator import: instant camera QR payload forwarding (bypassing redundant PNG re-encoding), multi-page QR export gallery batch import, text-file/raw URI import (`otpauth-migration://` and `otpauth://`), and dual-engine QR decoding fallback (Rust + ZXing).
 - YubiKey OATH: batch code calculation in a single USB session, with touch detection to avoid double-touch prompts.
 - YubiKey OATH: deleting a hardware-backed entry now frees its slot on the key.
 - YubiKey OATH: `YubiKey` badge on hardware-backed entries in the home list.

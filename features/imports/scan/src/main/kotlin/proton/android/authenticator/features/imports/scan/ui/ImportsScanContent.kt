@@ -50,7 +50,14 @@ internal fun ImportsScanContent(
             CameraQrScan(
                 modifier = modifier,
                 onCameraError = onCameraError,
-                onQrCodeScanned = { _, qrCodeBytes -> onQrCodeScanned(qrCodeBytes) }
+                onQrCodeScanned = { qrCodeValue, qrCodeBytes ->
+                    val payload = if (qrCodeValue.isNotBlank() && qrCodeValue.startsWith("otpauth", ignoreCase = true)) {
+                        qrCodeValue.toByteArray(Charsets.UTF_8)
+                    } else {
+                        qrCodeBytes
+                    }
+                    onQrCodeScanned(payload)
+                }
             )
         } else {
             onPermissionRequired(importType.ordinal)
