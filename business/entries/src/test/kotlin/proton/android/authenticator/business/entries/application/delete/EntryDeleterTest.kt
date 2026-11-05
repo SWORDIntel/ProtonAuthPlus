@@ -104,7 +104,7 @@ class EntryDeleterTest {
     }
 
     @Test
-    fun `when deleting YubiKey entry and key is connected, deletes physical credential and removes local entry`() =
+    fun `when deleting YubiKey entry and key is connected, deletes physical credential and tombstones local entry`() =
         runTest {
         val yubiKeyBackend = EntryCredentialBackend.YubiKeyOath(
             credentialId = "dGVzdC1jcmVkZW50aWFsLWlk",
@@ -134,11 +134,12 @@ class EntryDeleterTest {
         assertEquals("test-yubikey-1", result.id)
         coVerify(exactly = 1) { yubiKeyOathCredentialDeleter.hasConnectedYubiKey() }
         coVerify(exactly = 1) { yubiKeyOathCredentialDeleter.delete("dGVzdC1jcmVkZW50aWFsLWlk") }
-        coVerify(exactly = 1) { repository.remove(entry) }
+        coVerify(exactly = 1) { repository.save(match { it.id == entry.id && it.isDeleted && it.credentialBackend == yubiKeyBackend }) }
+        coVerify(exactly = 0) { repository.remove(any()) }
     }
 
     @Test
-    fun `when deleting YubiKey entry and key is disconnected, handles gracefully and deletes local entry`() = runTest {
+    fun `when deleting YubiKey entry and key is disconnected, handles gracefully and tombstones local entry`() = runTest {
         val yubiKeyBackend = EntryCredentialBackend.YubiKeyOath(
             credentialId = "dGVzdC1jcmVkZW50aWFsLWlk",
             deviceId = "dev-123",
@@ -167,11 +168,12 @@ class EntryDeleterTest {
         assertEquals("test-yubikey-2", result.id)
         coVerify(exactly = 1) { yubiKeyOathCredentialDeleter.hasConnectedYubiKey() }
         coVerify(exactly = 0) { yubiKeyOathCredentialDeleter.delete(any<String>()) }
-        coVerify(exactly = 1) { repository.remove(entry) }
+        coVerify(exactly = 1) { repository.save(match { it.id == entry.id && it.isDeleted && it.credentialBackend == yubiKeyBackend }) }
+        coVerify(exactly = 0) { repository.remove(any()) }
     }
 
     @Test
-    fun `when deleting YubiKey entry and deletion throws exception, handles gracefully and deletes local entry`() =
+    fun `when deleting YubiKey entry and deletion throws exception, handles gracefully and tombstones local entry`() =
         runTest {
         val yubiKeyBackend = EntryCredentialBackend.YubiKeyOath(
             credentialId = "dGVzdC1jcmVkZW50aWFsLWlk",
@@ -201,7 +203,8 @@ class EntryDeleterTest {
 
         assertEquals("test-yubikey-3", result.id)
         coVerify(exactly = 1) { yubiKeyOathCredentialDeleter.delete("dGVzdC1jcmVkZW50aWFsLWlk") }
-        coVerify(exactly = 1) { repository.remove(entry) }
+        coVerify(exactly = 1) { repository.save(match { it.id == entry.id && it.isDeleted && it.credentialBackend == yubiKeyBackend }) }
+        coVerify(exactly = 0) { repository.remove(any()) }
     }
 
     @Test

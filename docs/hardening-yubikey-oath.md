@@ -65,6 +65,15 @@ runtime plaintext is the main exposure against a compromised endpoint.
 - Cloud sync (`SyncEntriesModelsUseCase`) only syncs `LocalEncrypted` entries.
   Hardware entries carry no seed, so they are never pushed to Proton as empty
   secrets / `yubikey-oath://` URIs.
+- `EntriesSyncer` drops any remote entry whose local id belongs to a local
+  hardware entry (including tombstones) before computing sync operations, so a
+  cloud copy made before `Move to YubiKey` cannot overwrite the hardware entry.
+  Deleting a hardware entry tombstones it (`isDeleted = true`) instead of
+  removing the row so that block keeps working.
+- Known limitation: the pre-migration cloud copy is not removed automatically.
+  The seed remains in Proton cloud until you delete that item (e.g. from another
+  client). Automatic remote deletion is deliberately not done, because it would
+  destroy the only exportable backup of the account.
 
 ### Migration safety (`Move to YubiKey`)
 

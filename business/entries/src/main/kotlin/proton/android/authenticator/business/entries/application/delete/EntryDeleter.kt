@@ -47,7 +47,10 @@ internal class EntryDeleter @Inject constructor(
                 AuthenticatorLogger.d(TAG, "YubiKey not connected; skipping physical credential deletion for entry $id")
             }
         }
-        return if (entry.isSynced) {
+        // Hardware entries are always tombstoned rather than removed: an earlier cloud copy of the
+        // migrated seed may still exist remotely, and keeping the local id lets the syncer ignore
+        // it instead of resurrecting the entry as a software-backed one.
+        return if (entry.isSynced || backend is EntryCredentialBackend.YubiKeyOath) {
             val updatedEntry = entry.copy(
                 isDeleted = true,
                 modifiedAt = timeProvider.currentSeconds()

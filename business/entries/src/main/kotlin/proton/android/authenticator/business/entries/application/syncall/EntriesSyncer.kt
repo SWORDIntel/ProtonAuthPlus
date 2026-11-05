@@ -29,6 +29,7 @@ import me.proton.core.util.kotlin.takeIfNotEmpty
 import proton.android.authenticator.business.entries.domain.EntriesApi
 import proton.android.authenticator.business.entries.domain.EntriesRepository
 import proton.android.authenticator.business.entries.domain.Entry
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.business.entries.domain.EntryLocal
 import proton.android.authenticator.business.entries.domain.EntryRemote
 import proton.android.authenticator.business.entries.domain.EntrySort
@@ -70,7 +71,8 @@ internal class EntriesSyncer @Inject constructor(
         val (primaryKey, primaryEncryptionKey) = decryptedSyncKeys.first()
         val encryptionKeys = decryptedSyncKeys.map { (_, encryptionKey) -> encryptionKey }
 
-        val (remoteEntriesMap, undecryptableCount) = getRemoteEntriesMap(userId, encryptionKeys)
+        val (fetchedRemoteEntriesMap, undecryptableCount) = getRemoteEntriesMap(userId, encryptionKeys)
+        val remoteEntriesMap = excludeHardwareBackedEntries(fetchedRemoteEntriesMap)
 
         val localEntriesMap = getLocalEntriesMap(entries)
 
@@ -89,6 +91,31 @@ internal class EntriesSyncer @Inject constructor(
         )
 
         return undecryptableCount
+    }
+
+    /**
+     * Hardware-backed entries are never synced, but an older cloud copy of the same entry (from before it was
+     * moved to a YubiKey) may still exist remotely. Without this filter the sync would treat that copy as a
+     * remote-only entry and overwrite the local hardware entry with the old software seed.
+     */
+    private suspend fun excludeHardwareBackedEntries(
+        remoteEntriesMap: Map<String, EntryRemote>
+    ): Map<String, EntryRemote> {
+        val hardwareEntryIds = repository.findAll()
+            .first()
+            .filter { entry -> entry.credentialBackend is EntryCredentialBackend.YubiKeyOath }
+            .map(Entry::id)
+            .toSet()
+        if (hardwareEntryIds.isEmpty()) return remoteEntriesMap
+
+        return remoteEntriesMap
+            .filterValues { entryRemote -> entryRemote.localId !in hardwareEntryIds }
+            .also { filtered ->
+                val skipped = remoteEntriesMap.size - filtered.size
+                if (skipped > 0) {
+                    AuthenticatorLogger.i(TAG, "Ignoring $skipped remote entries that are hardware-backed locally")
+                }
+            }
     }
 
     private fun getLocalEntriesMap(syncEntries: List<SyncEntry>) = syncEntries
