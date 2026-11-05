@@ -90,7 +90,11 @@ internal class ImportOnboardingViewModel @Inject constructor(
             ImportEntriesReason.BadContent,
             ImportEntriesReason.BadPassword,
             ImportEntriesReason.FileTooLarge,
-            ImportEntriesReason.DecryptionFailed -> {
+            ImportEntriesReason.DecryptionFailed,
+            ImportEntriesReason.YubiKeyTimeout,
+            ImportEntriesReason.YubiKeyLocked,
+            ImportEntriesReason.YubiKeyStorageFull,
+            ImportEntriesReason.YubiKeyError -> {
                 ImportOnboardingEvent.OnFileImportFailed(reason = answer.reason.ordinal)
             }
 

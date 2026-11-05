@@ -84,7 +84,11 @@ internal class ImportsMenuViewModel @Inject constructor(
                         ImportEntriesReason.BadContent,
                         ImportEntriesReason.BadPassword,
                         ImportEntriesReason.DecryptionFailed,
-                        ImportEntriesReason.FileTooLarge -> {
+                        ImportEntriesReason.FileTooLarge,
+                        ImportEntriesReason.YubiKeyTimeout,
+                        ImportEntriesReason.YubiKeyLocked,
+                        ImportEntriesReason.YubiKeyStorageFull,
+                        ImportEntriesReason.YubiKeyError -> {
                             ImportsMenuEvent.OnImportFailed(reason = reason.ordinal)
                         }
 

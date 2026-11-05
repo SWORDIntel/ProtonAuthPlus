@@ -36,6 +36,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import proton.android.authenticator.features.imports.scan.presentation.ImportsScanEvent
 import proton.android.authenticator.features.imports.scan.presentation.ImportsScanViewModel
 import proton.android.authenticator.shared.common.domain.models.MimeType
+import proton.android.authenticator.shared.ui.domain.models.UiText
+import proton.android.authenticator.shared.ui.domain.screens.AlertDialogScreen
 import proton.android.authenticator.shared.ui.domain.screens.ScaffoldScreen
 import proton.android.authenticator.shared.ui.domain.theme.ThemePadding
 
@@ -82,6 +84,26 @@ fun ImportsScanScreen(
         }
 
         onConsumeEvent(event = state.event)
+    }
+
+    if (state.isWaitingForYubiKey) {
+        val promptError = state.yubiKeyPromptError
+        AlertDialogScreen(
+            title = UiText.Dynamic("Insert YubiKey to Finish Import"),
+            messages = listOf(
+                if (promptError != null) {
+                    UiText.Dynamic(promptError)
+                } else {
+                    UiText.Dynamic("Proton Authenticator + enforces hardware security. Please insert or tap your YubiKey to finish the import.")
+                }
+            ),
+            confirmText = UiText.Dynamic("Retry"),
+            onConfirmation = ::onRetryYubiKeyImport,
+            cancelText = UiText.Dynamic("Cancel"),
+            onCancellation = ::onCancelYubiKeyImport,
+            onDismissRequest = ::onCancelYubiKeyImport,
+            isLoading = promptError == null
+        )
     }
 
     ScaffoldScreen(

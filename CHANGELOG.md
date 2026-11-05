@@ -2,6 +2,9 @@
 
 ### Features :tada:
 
+- YubiKey-only policy: every created or imported entry (including Google Authenticator import) is written exclusively to the YubiKey OATH applet; no TOTP seed is stored on the phone.
+- Import without a key inserted now shows an "Insert YubiKey to Finish Import" prompt (30s discovery) with Retry/Cancel, and typed errors for timeout, locked key and full storage.
+- Imports write all credentials in a single USB CCID session (`YubiKeyOathCredentialWriter.writeBatch`).
 - Complete Google Authenticator import: instant camera QR payload forwarding (bypassing redundant PNG re-encoding), multi-page QR export gallery batch import, text-file/raw URI import (`otpauth-migration://` and `otpauth://`), and dual-engine QR decoding fallback (Rust + ZXing).
 - YubiKey OATH: batch code calculation in a single USB session, with touch detection to avoid double-touch prompts.
 - YubiKey OATH: deleting a hardware-backed entry now frees its slot on the key.

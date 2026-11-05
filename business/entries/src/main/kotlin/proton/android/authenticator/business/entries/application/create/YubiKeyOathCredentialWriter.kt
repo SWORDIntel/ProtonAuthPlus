@@ -42,27 +42,38 @@ internal class YubiKeyOathCredentialWriter @Inject constructor(
 ) {
 
     internal suspend fun write(command: CreateEntryCommand.FromYubiKeyTotp): YubiKeyOathCredentialWriteResult =
-        withUsbOathSession { oathSession ->
-            if (oathSession.isLocked) {
-                throw YubiKeyOathEnrollmentLockedError()
-            }
+        writeBatch(listOf(command)).first().second
 
-            val credentialData = CredentialData(
-                command.name,
-                OathType.TOTP,
-                command.algorithm.toYubiKeyHashAlgorithm(),
-                Base32.decode(command.secret.trim().replace(" ", "").replace("-", "").uppercase()),
-                command.digits,
-                command.period,
-                0,
-                command.issuer
-            )
+    internal suspend fun writeBatch(
+        commands: List<CreateEntryCommand.FromYubiKeyTotp>
+    ): List<Pair<CreateEntryCommand.FromYubiKeyTotp, YubiKeyOathCredentialWriteResult>> =
+        if (commands.isEmpty()) {
+            emptyList()
+        } else {
+            withUsbOathSession { oathSession ->
+                if (oathSession.isLocked) {
+                    throw YubiKeyOathEnrollmentLockedError()
+                }
 
-            oathSession.putCredential(credentialData, false).let { credential ->
-                YubiKeyOathCredentialWriteResult(
-                    credentialId = Base64.encodeToString(credential.id, Base64.URL_SAFE or Base64.NO_WRAP),
-                    deviceId = oathSession.deviceId
-                )
+                commands.map { command ->
+                    val credentialData = CredentialData(
+                        command.name,
+                        OathType.TOTP,
+                        command.algorithm.toYubiKeyHashAlgorithm(),
+                        Base32.decode(command.secret.trim().replace(" ", "").replace("-", "").uppercase()),
+                        command.digits,
+                        command.period,
+                        0,
+                        command.issuer
+                    )
+
+                    val credential = oathSession.putCredential(credentialData, false)
+                    val result = YubiKeyOathCredentialWriteResult(
+                        credentialId = Base64.encodeToString(credential.id, Base64.URL_SAFE or Base64.NO_WRAP),
+                        deviceId = oathSession.deviceId
+                    )
+                    command to result
+                }
             }
         }
 
@@ -118,7 +129,7 @@ internal class YubiKeyOathCredentialWriter @Inject constructor(
     }
 
     private companion object {
-        private const val USB_DISCOVERY_TIMEOUT_MILLIS = 10_000L
+        private const val USB_DISCOVERY_TIMEOUT_MILLIS = 30_000L
     }
 }
 

@@ -25,5 +25,9 @@ enum class ImportEntriesReason : AnswerReason {
     BadPassword,
     DecryptionFailed,
     MissingPassword,
-    FileTooLarge
+    FileTooLarge,
+    YubiKeyTimeout,
+    YubiKeyLocked,
+    YubiKeyStorageFull,
+    YubiKeyError
 }

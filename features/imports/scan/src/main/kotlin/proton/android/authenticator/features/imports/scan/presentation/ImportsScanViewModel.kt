@@ -50,15 +50,29 @@ class ImportsScanViewModel @Inject constructor(
 
     private val eventFlow = MutableStateFlow<ImportsScanEvent>(value = ImportsScanEvent.Idle)
 
+    private val isWaitingForYubiKeyFlow = MutableStateFlow(value = false)
+
+    private val yubiKeyPromptErrorFlow = MutableStateFlow<String?>(value = null)
+
+    private var pendingImportBytes: ByteArray? = null
+
+    private var pendingImportUris: List<Uri>? = null
+
+    private var importJob: kotlinx.coroutines.Job? = null
+
     @OptIn(ExperimentalCoroutinesApi::class)
     internal val stateFlow: StateFlow<ImportsScanState> = combine(
         hasCameraPermissionFlow,
-        eventFlow
-    ) { hasCameraPermission, event ->
+        eventFlow,
+        isWaitingForYubiKeyFlow,
+        yubiKeyPromptErrorFlow
+    ) { hasCameraPermission, event, isWaitingForYubiKey, yubiKeyPromptError ->
         ImportsScanState(
             hasCameraPermission = hasCameraPermission,
             importType = importType,
-            event = event
+            event = event,
+            isWaitingForYubiKey = isWaitingForYubiKey,
+            yubiKeyPromptError = yubiKeyPromptError
         )
     }.stateIn(
         scope = viewModelScope,
@@ -66,7 +80,9 @@ class ImportsScanViewModel @Inject constructor(
         initialValue = ImportsScanState(
             hasCameraPermission = null,
             event = ImportsScanEvent.Idle,
-            importType = importType
+            importType = importType,
+            isWaitingForYubiKey = false,
+            yubiKeyPromptError = null
         )
     )
 
@@ -85,50 +101,100 @@ class ImportsScanViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
-            importEntriesUseCase(uris, importType).fold(
+        pendingImportBytes = null
+        pendingImportUris = uris
+        startImportWithYubiKeyPrompt()
+    }
+
+    internal fun onQrCodeScanned(qrCodeBytes: ByteArray) {
+        pendingImportBytes = qrCodeBytes
+        pendingImportUris = null
+        startImportWithYubiKeyPrompt()
+    }
+
+    internal fun onRetryYubiKeyImport() {
+        startImportWithYubiKeyPrompt()
+    }
+
+    internal fun onCancelYubiKeyImport() {
+        importJob?.cancel()
+        importJob = null
+        isWaitingForYubiKeyFlow.value = false
+        yubiKeyPromptErrorFlow.value = null
+        pendingImportBytes = null
+        pendingImportUris = null
+    }
+
+    private fun startImportWithYubiKeyPrompt() {
+        isWaitingForYubiKeyFlow.value = true
+        yubiKeyPromptErrorFlow.value = null
+
+        importJob?.cancel()
+        importJob = viewModelScope.launch {
+            val bytes = pendingImportBytes
+            val uris = pendingImportUris
+
+            val result = if (bytes != null) {
+                importEntriesUseCase(bytes = bytes, importType = importType)
+            } else if (!uris.isNullOrEmpty()) {
+                importEntriesUseCase(uris = uris, importType = importType)
+            } else {
+                isWaitingForYubiKeyFlow.value = false
+                return@launch
+            }
+
+            result.fold(
                 onFailure = { reason ->
                     AuthenticatorLogger.w(TAG, "Failed to import entries for $importType: $reason")
 
                     when (reason) {
+                        ImportEntriesReason.YubiKeyTimeout -> {
+                            yubiKeyPromptErrorFlow.value = "YubiKey not detected. Please insert your YubiKey into your phone and tap Retry."
+                        }
+
+                        ImportEntriesReason.YubiKeyLocked -> {
+                            yubiKeyPromptErrorFlow.value = "YubiKey OATH is locked. Please unlock your key and tap Retry."
+                        }
+
+                        ImportEntriesReason.YubiKeyStorageFull -> {
+                            yubiKeyPromptErrorFlow.value = "YubiKey storage is full (32 slots max). Please free slots on your key and tap Retry."
+                        }
+
+                        ImportEntriesReason.YubiKeyError -> {
+                            yubiKeyPromptErrorFlow.value = "Error communicating with YubiKey. Please reconnect your key and tap Retry."
+                        }
+
+                        ImportEntriesReason.MissingPassword -> {
+                            isWaitingForYubiKeyFlow.value = false
+                            val uri = uris?.firstOrNull()?.toString().orEmpty()
+                            ImportsScanEvent.OnImportPasswordRequired(
+                                uri = uri,
+                                importType = importType.ordinal
+                            ).also { event -> eventFlow.update { event } }
+                        }
+
                         ImportEntriesReason.BadContent,
                         ImportEntriesReason.BadPassword,
                         ImportEntriesReason.DecryptionFailed,
                         ImportEntriesReason.FileTooLarge -> {
-                            ImportsScanEvent.OnImportFailed(reason = reason.ordinal)
-                        }
-
-                        ImportEntriesReason.MissingPassword -> {
-                            ImportsScanEvent.OnImportPasswordRequired(
-                                uri = uris.first().toString(),
-                                importType = importType.ordinal
-                            )
+                            isWaitingForYubiKeyFlow.value = false
+                            ImportsScanEvent.OnImportFailed(reason = reason.ordinal).also { event ->
+                                eventFlow.update { event }
+                            }
                         }
                     }
                 },
                 onSuccess = { importedEntriesCount ->
-                    AuthenticatorLogger.i(TAG, "Entries import succeeded for $importType")
-
-                    ImportsScanEvent.OnImportSucceeded(importedEntriesCount = importedEntriesCount)
+                    AuthenticatorLogger.i(TAG, "Entries import succeeded for $importType: $importedEntriesCount entries written to YubiKey")
+                    isWaitingForYubiKeyFlow.value = false
+                    yubiKeyPromptErrorFlow.value = null
+                    pendingImportBytes = null
+                    pendingImportUris = null
+                    ImportsScanEvent.OnImportSucceeded(importedEntriesCount = importedEntriesCount).also { event ->
+                        eventFlow.update { event }
+                    }
                 }
-            ).also { event -> eventFlow.update { event } }
-        }
-    }
-
-    internal fun onQrCodeScanned(qrCodeBytes: ByteArray) {
-        viewModelScope.launch {
-            importEntriesUseCase(bytes = qrCodeBytes, importType = importType).fold(
-                onFailure = { reason ->
-                    AuthenticatorLogger.w(TAG, "Failed to scan entries for $importType: $reason")
-
-                    ImportsScanEvent.OnImportFailed(reason = reason.ordinal)
-                },
-                onSuccess = { importedEntriesCount ->
-                    AuthenticatorLogger.i(TAG, "Entries scan succeeded for $importType")
-
-                    ImportsScanEvent.OnImportSucceeded(importedEntriesCount = importedEntriesCount)
-                }
-            ).also { event -> eventFlow.update { event } }
+            )
         }
     }
 

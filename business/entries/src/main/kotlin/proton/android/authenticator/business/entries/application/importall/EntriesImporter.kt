@@ -20,9 +20,13 @@ package proton.android.authenticator.business.entries.application.importall
 
 import android.net.Uri
 import kotlinx.coroutines.withContext
+import proton.android.authenticator.business.entries.application.create.CreateEntryCommand
+import proton.android.authenticator.business.entries.application.create.YubiKeyOathCredentialWriter
 import proton.android.authenticator.business.entries.application.shared.constants.EntryConstants
 import proton.android.authenticator.business.entries.domain.EntriesRepository
 import proton.android.authenticator.business.entries.domain.Entry
+import proton.android.authenticator.business.entries.domain.EntryAlgorithm
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.business.entries.domain.EntryImportType
 import proton.android.authenticator.business.shared.domain.infrastructure.files.FileReader
 import proton.android.authenticator.AuthenticatorEntryModel
@@ -47,7 +51,8 @@ internal class EntriesImporter @Inject constructor(
     private val mimeTypeProvider: MimeTypeProvider,
     private val qrScanner: QrScanner,
     private val repository: EntriesRepository,
-    private val timeProvider: TimeProvider
+    private val timeProvider: TimeProvider,
+    private val yubiKeyOathCredentialWriter: YubiKeyOathCredentialWriter
 ) {
     internal suspend fun import(contentBytes: List<Byte>, importType: EntryImportType): Int =
         saveEntries(getEntries(contentBytes, importType))
@@ -250,25 +255,49 @@ internal class EntriesImporter @Inject constructor(
     }
 
     private suspend fun saveEntries(entryModels: List<AuthenticatorEntryModel>): Int {
+        if (entryModels.isEmpty()) return 0
+
+        val commands = entryModels.map { model ->
+            val totpParams = authenticatorClient.getTotpParams(entry = model)
+            CreateEntryCommand.FromYubiKeyTotp(
+                name = model.name,
+                secret = model.secret,
+                issuer = model.issuer,
+                period = model.period.toInt(),
+                digits = totpParams.digits.toInt(),
+                algorithm = EntryAlgorithm.from(totpParams.algorithm.ordinal),
+                note = model.note
+            )
+        }
+
+        val writeResults = yubiKeyOathCredentialWriter.writeBatch(commands)
         var position = repository.searchMaxPosition()
 
         return encryptionContextProvider.withEncryptionContext {
-            entryModels.map { entryModel ->
+            val emptyContent = encrypt(ByteArray(size = 0), EncryptionTag.EntryContent)
+            writeResults.mapIndexed { index, (command, writeResult) ->
                 position += EntryConstants.POSITION_INCREMENT
-
                 val currentSeconds = timeProvider.currentSeconds()
+                val originalId = entryModels.getOrNull(index)?.id ?: java.util.UUID.randomUUID().toString()
 
                 Entry(
-                    id = entryModel.id,
-                    content = encrypt(
-                        authenticatorClient.serializeEntry(entryModel),
-                        EncryptionTag.EntryContent
-                    ),
+                    id = originalId,
+                    content = emptyContent,
                     createdAt = currentSeconds,
                     modifiedAt = currentSeconds,
                     isDeleted = false,
                     isSynced = false,
-                    position = position
+                    position = position,
+                    credentialBackend = EntryCredentialBackend.YubiKeyOath(
+                        credentialId = writeResult.credentialId,
+                        deviceId = writeResult.deviceId,
+                        name = command.name,
+                        issuer = command.issuer,
+                        note = command.note,
+                        period = command.period,
+                        algorithm = command.algorithm,
+                        digits = command.digits
+                    )
                 )
             }
         }

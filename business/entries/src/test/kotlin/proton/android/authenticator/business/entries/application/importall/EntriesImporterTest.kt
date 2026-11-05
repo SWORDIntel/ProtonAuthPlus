@@ -33,10 +33,15 @@ import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
 import proton.android.authenticator.AuthenticatorEntryModel
+import proton.android.authenticator.AuthenticatorEntryTotpParameters
 import proton.android.authenticator.AuthenticatorEntryType
+import proton.android.authenticator.business.entries.application.create.CreateEntryCommand
+import proton.android.authenticator.business.entries.application.create.YubiKeyOathCredentialWriteResult
+import proton.android.authenticator.business.entries.application.create.YubiKeyOathCredentialWriter
 import proton.android.authenticator.business.entries.application.shared.constants.EntryConstants
 import proton.android.authenticator.business.entries.domain.EntriesRepository
 import proton.android.authenticator.business.entries.domain.Entry
+import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.business.entries.domain.EntryImportType
 import proton.android.authenticator.business.shared.domain.infrastructure.files.FileReader
 import proton.android.authenticator.commonrust.AuthenticatorImportError
@@ -69,6 +74,7 @@ class EntriesImporterTest {
     private val qrScanner: QrScanner = mockk()
     private val repository: EntriesRepository = mockk()
     private val timeProvider: TimeProvider = mockk()
+    private val yubiKeyOathCredentialWriter: YubiKeyOathCredentialWriter = mockk()
 
     private lateinit var importer: EntriesImporter
 
@@ -96,6 +102,18 @@ class EntriesImporterTest {
 
     @Before
     fun setUp() {
+        val mockTotpParams: AuthenticatorEntryTotpParameters = mockk {
+            every { digits } returns 6u.toUByte()
+            every { algorithm } returns proton.android.pass.totp.Algorithm.SHA1
+        }
+        every { authenticatorClient.getTotpParams(any()) } returns mockTotpParams
+        coEvery { yubiKeyOathCredentialWriter.writeBatch(any()) } answers {
+            val cmds = firstArg<List<CreateEntryCommand.FromYubiKeyTotp>>()
+            cmds.map { cmd ->
+                cmd to YubiKeyOathCredentialWriteResult(credentialId = "cred-${cmd.name}", deviceId = "dev-1")
+            }
+        }
+
         importer = EntriesImporter(
             appDispatchers = appDispatchers,
             authenticatorClient = authenticatorClient,
@@ -105,7 +123,8 @@ class EntriesImporterTest {
             mimeTypeProvider = mimeTypeProvider,
             qrScanner = qrScanner,
             repository = repository,
-            timeProvider = timeProvider
+            timeProvider = timeProvider,
+            yubiKeyOathCredentialWriter = yubiKeyOathCredentialWriter
         )
 
         coEvery { repository.searchMaxPosition() } returns 0

@@ -106,7 +106,11 @@ internal class ImportsPasswordViewModel @Inject constructor(
             ImportEntriesReason.BadContent,
             ImportEntriesReason.DecryptionFailed,
             ImportEntriesReason.FileTooLarge,
-            ImportEntriesReason.MissingPassword -> {
+            ImportEntriesReason.MissingPassword,
+            ImportEntriesReason.YubiKeyTimeout,
+            ImportEntriesReason.YubiKeyLocked,
+            ImportEntriesReason.YubiKeyStorageFull,
+            ImportEntriesReason.YubiKeyError -> {
                 eventFlow.update {
                     ImportsPasswordEvent.OnFileImportFailed(reason = answer.reason.ordinal)
                 }

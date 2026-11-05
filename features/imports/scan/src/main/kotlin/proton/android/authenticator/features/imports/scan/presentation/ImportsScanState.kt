@@ -26,7 +26,9 @@ import proton.android.authenticator.shared.common.domain.models.MimeType
 internal data class ImportsScanState(
     internal val hasCameraPermission: Boolean?,
     internal val event: ImportsScanEvent,
-    internal val importType: EntryImportType
+    internal val importType: EntryImportType,
+    internal val isWaitingForYubiKey: Boolean = false,
+    internal val yubiKeyPromptError: String? = null
 ) {
 
     internal val isMultiSelectionAllowed: Boolean = when (importType) {

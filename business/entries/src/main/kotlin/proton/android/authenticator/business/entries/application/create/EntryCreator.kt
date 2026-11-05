@@ -21,6 +21,7 @@ package proton.android.authenticator.business.entries.application.create
 import proton.android.authenticator.business.entries.application.shared.constants.EntryConstants
 import proton.android.authenticator.business.entries.domain.EntriesRepository
 import proton.android.authenticator.business.entries.domain.Entry
+import proton.android.authenticator.business.entries.domain.EntryAlgorithm
 import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.AuthenticatorEntryModel
 import proton.android.authenticator.commonrust.AuthenticatorMobileClientInterface
@@ -38,28 +39,18 @@ internal class EntryCreator @Inject constructor(
 ) {
 
     internal suspend fun create(model: AuthenticatorEntryModel) {
-        authenticatorClient.serializeEntry(model)
-            .let { decryptedModelContent ->
-                encryptionContextProvider.withEncryptionContext {
-                    encrypt(decryptedModelContent, EncryptionTag.EntryContent)
-                }
-            }
-            .let { encryptedContent -> encryptedContent to timeProvider.currentSeconds() }
-            .let { (encryptedContent, currentSeconds) ->
-                Entry(
-                    id = model.id,
-                    content = encryptedContent,
-                    createdAt = currentSeconds,
-                    modifiedAt = currentSeconds,
-                    isDeleted = false,
-                    isSynced = false,
-                    position = repository.searchMaxPosition()
-                        .plus(EntryConstants.POSITION_INCREMENT)
-                )
-            }
-            .also { entry ->
-                repository.save(entry)
-            }
+        val totpParams = authenticatorClient.getTotpParams(entry = model)
+        createYubiKeyTotp(
+            CreateEntryCommand.FromYubiKeyTotp(
+                name = model.name,
+                secret = model.secret,
+                issuer = model.issuer,
+                period = model.period.toInt(),
+                digits = totpParams.digits.toInt(),
+                algorithm = EntryAlgorithm.from(totpParams.algorithm.ordinal),
+                note = model.note
+            )
+        )
     }
 
     internal suspend fun createYubiKeyTotp(command: CreateEntryCommand.FromYubiKeyTotp) {

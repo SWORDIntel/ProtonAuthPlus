@@ -27,11 +27,15 @@ import proton.android.authenticator.shared.ui.domain.models.UiText
 internal data class ImportsErrorState(private val errorReason: ImportEntriesReason) {
 
     internal val errorText: UiText = when (errorReason) {
-        ImportEntriesReason.BadContent -> R.string.imports_error_dialog_message_bad_content
-        ImportEntriesReason.DecryptionFailed -> R.string.imports_error_dialog_message_bad_encryption
-        ImportEntriesReason.FileTooLarge -> R.string.imports_error_dialog_message_file_too_large
-        ImportEntriesReason.BadPassword -> R.string.imports_error_dialog_message_bad_password
-        ImportEntriesReason.MissingPassword -> R.string.imports_error_dialog_message_missing_password
-    }.let(UiText::Resource)
+        ImportEntriesReason.BadContent -> UiText.Resource(R.string.imports_error_dialog_message_bad_content)
+        ImportEntriesReason.DecryptionFailed -> UiText.Resource(R.string.imports_error_dialog_message_bad_encryption)
+        ImportEntriesReason.FileTooLarge -> UiText.Resource(R.string.imports_error_dialog_message_file_too_large)
+        ImportEntriesReason.BadPassword -> UiText.Resource(R.string.imports_error_dialog_message_bad_password)
+        ImportEntriesReason.MissingPassword -> UiText.Resource(R.string.imports_error_dialog_message_missing_password)
+        ImportEntriesReason.YubiKeyTimeout -> UiText.Dynamic("YubiKey discovery timed out. Please insert or tap your YubiKey.")
+        ImportEntriesReason.YubiKeyLocked -> UiText.Dynamic("YubiKey OATH session is password-protected or locked.")
+        ImportEntriesReason.YubiKeyStorageFull -> UiText.Dynamic("YubiKey OATH storage is full. Please remove unused credentials.")
+        ImportEntriesReason.YubiKeyError -> UiText.Dynamic("Failed to write credentials to YubiKey hardware.")
+    }
 
 }

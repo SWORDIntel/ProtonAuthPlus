@@ -18,6 +18,13 @@
 
 package proton.android.authenticator.business.entries.application.importall
 
+import com.yubico.yubikit.core.application.CommandException
+import com.yubico.yubikit.core.application.TimeoutException
+import com.yubico.yubikit.core.smartcard.ApduException
+import com.yubico.yubikit.core.smartcard.SW
+import kotlinx.coroutines.TimeoutCancellationException
+import proton.android.authenticator.business.entries.application.create.YubiKeyOathCredentialNotFoundError
+import proton.android.authenticator.business.entries.application.create.YubiKeyOathEnrollmentLockedError
 import proton.android.authenticator.business.shared.domain.errors.ErrorLoggingUtils
 import proton.android.authenticator.business.shared.domain.errors.FileTooLargeException
 import proton.android.authenticator.commonrust.AuthenticatorImportException
@@ -106,6 +113,53 @@ internal class ImportEntriesCommandHandler @Inject constructor(
             throwable = e,
             message = "Could not import entries due to file too large",
             reason = ImportEntriesReason.FileTooLarge,
+            tag = TAG
+        )
+    } catch (e: TimeoutCancellationException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not import entries: YubiKey operation timed out",
+            reason = ImportEntriesReason.YubiKeyTimeout,
+            tag = TAG
+        )
+    } catch (e: TimeoutException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not import entries: YubiKey timed out",
+            reason = ImportEntriesReason.YubiKeyTimeout,
+            tag = TAG
+        )
+    } catch (e: YubiKeyOathEnrollmentLockedError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not import entries: YubiKey OATH is locked",
+            reason = ImportEntriesReason.YubiKeyLocked,
+            tag = TAG
+        )
+    } catch (e: ApduException) {
+        val reason = when (e.sw) {
+            SW.NO_SPACE, SW.MEMORY_ERROR -> ImportEntriesReason.YubiKeyStorageFull
+            SW.AUTH_METHOD_BLOCKED, SW.SECURITY_CONDITION_NOT_SATISFIED -> ImportEntriesReason.YubiKeyLocked
+            else -> ImportEntriesReason.YubiKeyError
+        }
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not import entries: APDU error (SW: ${e.sw})",
+            reason = reason,
+            tag = TAG
+        )
+    } catch (e: CommandException) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not import entries: YubiKey command error",
+            reason = ImportEntriesReason.YubiKeyError,
+            tag = TAG
+        )
+    } catch (e: YubiKeyOathCredentialNotFoundError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not import entries: YubiKey credential not found",
+            reason = ImportEntriesReason.YubiKeyError,
             tag = TAG
         )
     } catch (e: IllegalArgumentException) {
