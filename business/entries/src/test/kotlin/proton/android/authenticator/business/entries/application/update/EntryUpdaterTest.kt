@@ -211,6 +211,75 @@ class EntryUpdaterTest {
         val ykBackend = saved.credentialBackend as EntryCredentialBackend.YubiKeyOath
         assertEquals("yubikey-cred-123", ykBackend.credentialId)
         assertEquals("dev-456", ykBackend.deviceId)
+        assertEquals(false, saved.isSynced)
+    }
+
+    @Test
+    fun `when migrating synced entry with deleteCloudCopy=true, migrated entry retains isSynced=true`() = runTest {
+        val originalSecretBytes = EncryptedByteArray(byteArrayOf(1, 2, 3))
+        val emptyEncryptedContent = EncryptedByteArray(byteArrayOf(0, 0, 0))
+        val existingEntry = Entry(
+            id = "entry-1",
+            content = originalSecretBytes,
+            createdAt = 500L,
+            modifiedAt = 500L,
+            isDeleted = false,
+            isSynced = true,
+            position = 0,
+            credentialBackend = EntryCredentialBackend.LocalEncrypted
+        )
+        every { repository.find("entry-1") } returns flowOf(existingEntry)
+        coEvery { yubiKeyOathCredentialWriter.write(any()) } returns YubiKeyOathCredentialWriteResult(
+            credentialId = "yubikey-cred-123",
+            deviceId = "dev-456"
+        )
+        every { encryptionContext.decrypt(originalSecretBytes, EncryptionTag.EntryContent) } returns byteArrayOf(1, 2)
+        every { authenticatorClient.deserializeEntry(byteArrayOf(1, 2)) } returns sampleModel
+        every { authenticatorClient.generateCodes(listOf(sampleModel), 1000uL) } returns listOf(
+            AuthenticatorCodeResponseModel(currentCode = "123456", nextCode = "654321", entry = sampleModel)
+        )
+        coEvery { yubiKeyOathCredentialWriter.calculateCode("yubikey-cred-123", 1000L) } returns "123456"
+        every { encryptionContext.encrypt(match { it.isEmpty() }, EncryptionTag.EntryContent) } returns emptyEncryptedContent
+
+        updater.migrateToYubiKeyTotp(sampleCommand.copy(deleteCloudCopy = true))
+
+        val savedSlot = slot<Entry>()
+        coVerify(exactly = 1) { repository.save(capture(savedSlot)) }
+        assertEquals(true, savedSlot.captured.isSynced)
+    }
+
+    @Test
+    fun `when migrating synced entry with deleteCloudCopy=false, migrated entry sets isSynced=false`() = runTest {
+        val originalSecretBytes = EncryptedByteArray(byteArrayOf(1, 2, 3))
+        val emptyEncryptedContent = EncryptedByteArray(byteArrayOf(0, 0, 0))
+        val existingEntry = Entry(
+            id = "entry-1",
+            content = originalSecretBytes,
+            createdAt = 500L,
+            modifiedAt = 500L,
+            isDeleted = false,
+            isSynced = true,
+            position = 0,
+            credentialBackend = EntryCredentialBackend.LocalEncrypted
+        )
+        every { repository.find("entry-1") } returns flowOf(existingEntry)
+        coEvery { yubiKeyOathCredentialWriter.write(any()) } returns YubiKeyOathCredentialWriteResult(
+            credentialId = "yubikey-cred-123",
+            deviceId = "dev-456"
+        )
+        every { encryptionContext.decrypt(originalSecretBytes, EncryptionTag.EntryContent) } returns byteArrayOf(1, 2)
+        every { authenticatorClient.deserializeEntry(byteArrayOf(1, 2)) } returns sampleModel
+        every { authenticatorClient.generateCodes(listOf(sampleModel), 1000uL) } returns listOf(
+            AuthenticatorCodeResponseModel(currentCode = "123456", nextCode = "654321", entry = sampleModel)
+        )
+        coEvery { yubiKeyOathCredentialWriter.calculateCode("yubikey-cred-123", 1000L) } returns "123456"
+        every { encryptionContext.encrypt(match { it.isEmpty() }, EncryptionTag.EntryContent) } returns emptyEncryptedContent
+
+        updater.migrateToYubiKeyTotp(sampleCommand.copy(deleteCloudCopy = false))
+
+        val savedSlot = slot<Entry>()
+        coVerify(exactly = 1) { repository.save(capture(savedSlot)) }
+        assertEquals(false, savedSlot.captured.isSynced)
     }
 
     @Test

@@ -91,6 +91,8 @@ internal class HomeManualViewModel @Inject constructor(
 
     private val isLoadingFlow = MutableStateFlow(value = false)
 
+    private val showMigrateConfirmationDialogFlow = MutableStateFlow(value = false)
+
     private val formTextInputsFlow = combine(
         snapshotFlow { titleState.value },
         snapshotFlow { secretState.value },
@@ -174,8 +176,14 @@ internal class HomeManualViewModel @Inject constructor(
     internal val stateFlow: StateFlow<HomeManualState> = combine(
         eventFlow,
         formModelFlow,
-        HomeManualState::Ready
-    ).stateIn(
+        showMigrateConfirmationDialogFlow
+    ) { event, formModel, showMigrateConfirmationDialog ->
+        HomeManualState.Ready(
+            event = event,
+            formModel = formModel,
+            showMigrateConfirmationDialog = showMigrateConfirmationDialog
+        )
+    }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = HomeManualState.Loading
@@ -241,7 +249,17 @@ internal class HomeManualViewModel @Inject constructor(
 
     internal fun onMigrateToYubiKey(formModel: HomeManualFormModel) {
         if (isLoadingFlow.value) return
-        entryId?.also { id -> migrateToYubiKey(id, formModel) }
+        showMigrateConfirmationDialogFlow.update { true }
+    }
+
+    internal fun onConfirmMigrateToYubiKey(formModel: HomeManualFormModel, deleteCloudCopy: Boolean) {
+        showMigrateConfirmationDialogFlow.update { false }
+        if (isLoadingFlow.value) return
+        entryId?.also { id -> migrateToYubiKey(id, formModel, deleteCloudCopy) }
+    }
+
+    internal fun onDismissMigrateDialog() {
+        showMigrateConfirmationDialogFlow.update { false }
     }
 
     private fun createEntry(formModel: HomeManualFormModel) {
@@ -362,11 +380,19 @@ internal class HomeManualViewModel @Inject constructor(
         }
     }
 
-    private fun migrateToYubiKey(entryId: String, formModel: HomeManualFormModel) {
+    private fun migrateToYubiKey(
+        entryId: String,
+        formModel: HomeManualFormModel,
+        deleteCloudCopy: Boolean = true
+    ) {
         viewModelScope.launch {
             isLoadingFlow.update { true }
             try {
-                updateEntryUseCase.migrateToYubiKey(entryId = entryId, formModel = formModel).also { answer ->
+                updateEntryUseCase.migrateToYubiKey(
+                    entryId = entryId,
+                    formModel = formModel,
+                    deleteCloudCopy = deleteCloudCopy
+                ).also { answer ->
                     when (answer) {
                         is Answer.Failure -> {
                             when (answer.reason) {

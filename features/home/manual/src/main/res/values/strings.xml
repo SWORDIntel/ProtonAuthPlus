@@ -41,4 +41,9 @@
     <string name="home_manual_snackbar_message_yubikey_timeout">YubiKey operation timed out. Please insert or tap your key and try again.</string>
     <string name="home_manual_snackbar_message_yubikey_storage_full">YubiKey storage is full. Please remove unused credentials to free up space.</string>
     <string name="home_manual_snackbar_message_yubikey_verification_failed">YubiKey code verification failed. Migration cancelled.</string>
+
+    <string name="home_manual_dialog_migrate_yubikey_title">Move to YubiKey</string>
+    <string name="home_manual_dialog_migrate_yubikey_message">This entry will be moved to your YubiKey and its TOTP secret stored on hardware.\n\nDo you also want to delete the copy stored in Proton Cloud? (Recommended: Delete to ensure the secret is only resident on your hardware key).</string>
+    <string name="home_manual_dialog_migrate_yubikey_delete_cloud">Delete cloud copy</string>
+    <string name="home_manual_dialog_migrate_yubikey_keep_cloud">Keep cloud copy</string>
 </resources>

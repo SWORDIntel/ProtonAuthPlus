@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import proton.android.authenticator.features.home.manual.R
 import proton.android.authenticator.features.home.manual.presentation.HomeManualEvent
 import proton.android.authenticator.features.home.manual.presentation.HomeManualState
 import proton.android.authenticator.features.home.manual.presentation.HomeManualViewModel
@@ -39,6 +40,7 @@ import proton.android.authenticator.shared.ui.domain.components.bars.SmallTopBar
 import proton.android.authenticator.shared.ui.domain.models.UiIcon
 import proton.android.authenticator.shared.ui.domain.models.UiText
 import proton.android.authenticator.shared.ui.domain.modifiers.backgroundScreenGradient
+import proton.android.authenticator.shared.ui.domain.screens.AlertDialogScreen
 import proton.android.authenticator.shared.ui.domain.screens.ScaffoldScreen
 import proton.android.authenticator.shared.ui.domain.theme.Theme
 import proton.android.authenticator.shared.ui.domain.theme.ThemePadding
@@ -114,6 +116,18 @@ fun HomeManualScreen(
                         onShowAdvanceOptions = ::onShowAdvanceOptions
                     )
                 }
+            }
+
+            if (currentState.showMigrateConfirmationDialog) {
+                AlertDialogScreen(
+                    title = UiText.Resource(id = R.string.home_manual_dialog_migrate_yubikey_title),
+                    message = UiText.Resource(id = R.string.home_manual_dialog_migrate_yubikey_message),
+                    confirmText = UiText.Resource(id = R.string.home_manual_dialog_migrate_yubikey_delete_cloud),
+                    onConfirmation = { onConfirmMigrateToYubiKey(currentState.formModel, deleteCloudCopy = true) },
+                    cancelText = UiText.Resource(id = R.string.home_manual_dialog_migrate_yubikey_keep_cloud),
+                    onCancellation = { onConfirmMigrateToYubiKey(currentState.formModel, deleteCloudCopy = false) },
+                    onDismissRequest = ::onDismissMigrateDialog
+                )
             }
         }
     }

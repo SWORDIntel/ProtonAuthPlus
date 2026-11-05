@@ -132,6 +132,33 @@ class EntriesSyncerTest {
         assertTrue(remoteOperations.captured.isEmpty())
     }
 
+    @Test
+    fun `hardware entry with pending cloud deletion triggers api deleteAll and marks entry isSynced false`() = runTest {
+        val hardwareEntryPendingDeletion = entry(id = HARDWARE_ID, backend = hardwareBackend()).copy(isSynced = true)
+        every { repository.findAll() } returns flowOf(listOf(hardwareEntryPendingDeletion))
+        coEvery { api.fetchAll(any(), any()) } returns FetchEntriesResult(
+            entries = listOf(
+                remote(remoteId = "remote-hw", localId = HARDWARE_ID)
+            )
+        )
+        val remoteOperations = slot<List<RemoteEntry>>()
+        every { syncOperationChecker.calculateOperations(capture(remoteOperations), any()) } returns emptyList()
+
+        syncer.sync(
+            userId = USER_ID,
+            keys = listOf(SyncKey(id = "key-1", encryptedKey = EncryptedByteArray(byteArrayOf(1)))),
+            entries = emptyList()
+        )
+
+        coVerify(exactly = 1) { api.deleteAll(USER_ID, listOf("remote-hw")) }
+        coVerify(exactly = 1) {
+            repository.saveAll(match { entries ->
+                entries.size == 1 && entries.first().id == HARDWARE_ID && !entries.first().isSynced
+            })
+        }
+        assertTrue(remoteOperations.captured.isEmpty())
+    }
+
     private fun hardwareBackend() = EntryCredentialBackend.YubiKeyOath(
         credentialId = "cred-id",
         deviceId = "device-id",

@@ -6,6 +6,7 @@
 - YubiKey OATH: deleting a hardware-backed entry now frees its slot on the key.
 - YubiKey OATH: `YubiKey` badge on hardware-backed entries in the home list.
 - YubiKey OATH: busy state during key discovery and typed error messages (locked, timeout, storage full, generic error, verification failed).
+- Move to YubiKey: explicit confirmation dialog to delete or keep the Proton Cloud copy (default: delete cloud copy), with automated remote deletion during sync.
 
 ### Fixes :bug:
 

@@ -53,7 +53,8 @@ internal class UpdateEntryUseCase @Inject constructor(private val commandBus: Co
 
     internal suspend fun migrateToYubiKey(
         entryId: String,
-        formModel: HomeManualFormModel
+        formModel: HomeManualFormModel,
+        deleteCloudCopy: Boolean = true
     ): Answer<Unit, UpdateEntryReason> = UpdateEntryCommand.ToYubiKeyTotp(
         id = entryId,
         name = formModel.title,
@@ -62,7 +63,8 @@ internal class UpdateEntryUseCase @Inject constructor(private val commandBus: Co
         period = formModel.timeInterval,
         digits = formModel.digits,
         algorithm = formModel.algorithm,
-        position = formModel.position
+        position = formModel.position,
+        deleteCloudCopy = deleteCloudCopy
     ).let { command -> commandBus.dispatch(command) }
 
 }

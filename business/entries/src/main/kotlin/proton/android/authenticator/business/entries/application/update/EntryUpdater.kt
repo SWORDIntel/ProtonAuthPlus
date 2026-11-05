@@ -104,7 +104,7 @@ internal class EntryUpdater @Inject constructor(
                 existingEntry.copy(
                     content = encryptedContent,
                     modifiedAt = currentTimestamp,
-                    isSynced = false,
+                    isSynced = command.deleteCloudCopy && existingEntry.isSynced,
                     position = command.position,
                     credentialBackend = EntryCredentialBackend.YubiKeyOath(
                         credentialId = writeResult.credentialId,

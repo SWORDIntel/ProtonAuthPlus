@@ -93,7 +93,8 @@ sealed class UpdateEntryCommand : Command {
         internal val issuer: String,
         internal val period: Int,
         internal val digits: Int,
-        internal val algorithm: EntryAlgorithm
+        internal val algorithm: EntryAlgorithm,
+        internal val deleteCloudCopy: Boolean = true
     ) : UpdateEntryCommand() {
 
         internal fun toCreateCommand() = proton.android.authenticator.business.entries.application.create

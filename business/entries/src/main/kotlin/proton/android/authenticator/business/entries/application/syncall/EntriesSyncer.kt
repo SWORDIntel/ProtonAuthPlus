@@ -72,7 +72,10 @@ internal class EntriesSyncer @Inject constructor(
         val encryptionKeys = decryptedSyncKeys.map { (_, encryptionKey) -> encryptionKey }
 
         val (fetchedRemoteEntriesMap, undecryptableCount) = getRemoteEntriesMap(userId, encryptionKeys)
-        val remoteEntriesMap = excludeHardwareBackedEntries(fetchedRemoteEntriesMap)
+        val remoteEntriesMap = excludeHardwareBackedEntries(
+            remoteEntriesMap = fetchedRemoteEntriesMap,
+            userId = userId
+        )
 
         val localEntriesMap = getLocalEntriesMap(entries)
 
@@ -97,16 +100,46 @@ internal class EntriesSyncer @Inject constructor(
      * Hardware-backed entries are never synced, but an older cloud copy of the same entry (from before it was
      * moved to a YubiKey) may still exist remotely. Without this filter the sync would treat that copy as a
      * remote-only entry and overwrite the local hardware entry with the old software seed.
+     *
+     * If an entry was migrated with deleteCloudCopy=true, it is marked isSynced=true until this sync runs,
+     * which deletes the remote cloud copy via api.deleteAll and clears isSynced to false.
      */
     private suspend fun excludeHardwareBackedEntries(
-        remoteEntriesMap: Map<String, EntryRemote>
+        remoteEntriesMap: Map<String, EntryRemote>,
+        userId: String
     ): Map<String, EntryRemote> {
-        val hardwareEntryIds = repository.findAll()
+        val allHardwareEntries = repository.findAll()
             .first()
             .filter { entry -> entry.credentialBackend is EntryCredentialBackend.YubiKeyOath }
+        if (allHardwareEntries.isEmpty()) return remoteEntriesMap
+
+        val hardwareEntryIds = allHardwareEntries.map(Entry::id).toSet()
+
+        val entriesPendingCloudDeletion = allHardwareEntries
+            .filter { entry -> entry.isSynced }
             .map(Entry::id)
             .toSet()
-        if (hardwareEntryIds.isEmpty()) return remoteEntriesMap
+
+        if (entriesPendingCloudDeletion.isNotEmpty()) {
+            val remoteIdsToDelete = remoteEntriesMap.values
+                .filter { entryRemote -> entryRemote.localId in entriesPendingCloudDeletion }
+                .map { it.id }
+
+            if (remoteIdsToDelete.isNotEmpty()) {
+                remoteIdsToDelete.chunked(BATCH_SIZE).forEach { batch ->
+                    api.deleteAll(userId = userId, entryIds = batch)
+                }
+                AuthenticatorLogger.i(
+                    TAG,
+                    "Deleted ${remoteIdsToDelete.size} remote cloud copies for migrated YubiKey entries"
+                )
+
+                val updatedEntries = allHardwareEntries
+                    .filter { it.id in entriesPendingCloudDeletion }
+                    .map { it.copy(isSynced = false) }
+                repository.saveAll(updatedEntries)
+            }
+        }
 
         return remoteEntriesMap
             .filterValues { entryRemote -> entryRemote.localId !in hardwareEntryIds }

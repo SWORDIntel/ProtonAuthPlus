@@ -65,15 +65,22 @@ runtime plaintext is the main exposure against a compromised endpoint.
 - Cloud sync (`SyncEntriesModelsUseCase`) only syncs `LocalEncrypted` entries.
   Hardware entries carry no seed, so they are never pushed to Proton as empty
   secrets / `yubikey-oath://` URIs.
+- Cloud copy handling on migration: When moving an entry to YubiKey, an explicit
+  confirmation dialog is presented: "Do you also want to delete the cloud copy stored
+  in Proton Cloud?".
+  - The default positive choice is "Delete cloud copy" (`deleteCloudCopy = true`).
+    Upon migration verification, the hardware entry retains `isSynced = true` as a
+    pending cloud-deletion request. On the next sync, `EntriesSyncer` invokes
+    `api.deleteAll` for that remote copy in Proton Cloud and clears `isSynced` to
+    `false`.
+  - The secondary choice is "Keep cloud copy" (`deleteCloudCopy = false`). The entry
+    sets `isSynced = false`, leaving the remote copy in Proton Cloud untouched while
+    ensuring it never overwrites the local hardware entry.
 - `EntriesSyncer` drops any remote entry whose local id belongs to a local
   hardware entry (including tombstones) before computing sync operations, so a
   cloud copy made before `Move to YubiKey` cannot overwrite the hardware entry.
   Deleting a hardware entry tombstones it (`isDeleted = true`) instead of
   removing the row so that block keeps working.
-- Known limitation: the pre-migration cloud copy is not removed automatically.
-  The seed remains in Proton cloud until you delete that item (e.g. from another
-  client). Automatic remote deletion is deliberately not done, because it would
-  destroy the only exportable backup of the account.
 
 ### Migration safety (`Move to YubiKey`)
 

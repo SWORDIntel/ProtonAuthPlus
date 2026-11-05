@@ -37,7 +37,8 @@ internal sealed interface HomeManualState {
     @Immutable
     data class Ready(
         override val event: HomeManualEvent,
-        internal val formModel: HomeManualFormModel
+        internal val formModel: HomeManualFormModel,
+        internal val showMigrateConfirmationDialog: Boolean = false
     ) : HomeManualState {
 
         internal val title: UiText = when (formModel.mode) {
