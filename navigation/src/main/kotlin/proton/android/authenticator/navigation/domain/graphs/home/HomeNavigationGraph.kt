@@ -2,11 +2,13 @@ package proton.android.authenticator.navigation.domain.graphs.home
 
 import androidx.compose.material.navigation.bottomSheet
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.dialog
 import androidx.navigation.compose.navigation
+import kotlinx.coroutines.launch
 import proton.android.authenticator.features.home.delete.ui.HomeDeleteScreen
 import proton.android.authenticator.features.home.errors.ui.HomeErrorsScreen
 import proton.android.authenticator.features.home.manual.ui.HomeManualScreen
@@ -80,12 +82,16 @@ internal fun NavGraphBuilder.homeNavigationGraph(
         }
 
         dialog<HomeDeleteNavigationDestination> {
+            val context = LocalContext.current
+            val scope = rememberCoroutineScope()
             HomeDeleteScreen(
                 onDismissed = {
                     onNavigate(NavigationCommand.NavigateUp)
                 },
-                onError = {
+                onError = { messageRes ->
+                    val message = context.getString(messageRes)
                     onNavigate(NavigationCommand.NavigateUp)
+                    scope.launch { snackbarHostState.showSnackbar(message) }
                 },
                 onSuccess = {
                     onNavigate(NavigationCommand.NavigateUp)

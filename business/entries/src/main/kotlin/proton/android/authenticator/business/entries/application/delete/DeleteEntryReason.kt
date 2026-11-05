@@ -21,5 +21,7 @@ package proton.android.authenticator.business.entries.application.delete
 import proton.android.authenticator.shared.common.domain.answers.AnswerReason
 
 enum class DeleteEntryReason : AnswerReason {
-    EntryNotFound
+    EntryNotFound,
+    YubiKeyUnavailable,
+    YubiKeyDeleteFailed
 }

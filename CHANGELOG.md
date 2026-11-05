@@ -17,7 +17,7 @@
 - `Move to YubiKey` now verifies the key's TOTP code against the local seed before erasing the local seed.
 - Editing a hardware-backed entry no longer strips the YubiKey backend and overwrites it with an empty secret.
 - Hardware-backed entries are no longer synced to Proton cloud with empty secrets, and an older cloud copy of a migrated entry can no longer overwrite the local YubiKey entry with the old software seed.
-- Deleting a hardware-backed entry now tombstones it locally so a leftover cloud copy cannot resurrect it as a software entry.
+- Hardware-backed entries are tombstoned locally only after their YubiKey credential is confirmed deleted; disconnects or physical deletion failures retain the local entry and show an error. Uninstalling or clearing app data does not erase credentials stored on the YubiKey.
 - Export and automatic backup skip hardware-backed entries instead of failing permanently.
 - Pasted Base32 secrets with spaces/dashes/lowercase are normalised; invalid secrets show an error instead of crashing.
 - A corrupt hardware row no longer crashes the entries list or stops observation of all entries.

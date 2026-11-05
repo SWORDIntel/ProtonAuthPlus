@@ -47,6 +47,20 @@ internal class DeleteEntryCommandHandler @Inject constructor(
             reason = DeleteEntryReason.EntryNotFound,
             tag = TAG
         )
+    } catch (e: YubiKeyOathUnavailableError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not delete hardware-backed entry because YubiKey is not connected",
+            reason = DeleteEntryReason.YubiKeyUnavailable,
+            tag = TAG
+        )
+    } catch (e: YubiKeyOathCredentialDeleteError) {
+        ErrorLoggingUtils.logAndReturnFailure(
+            throwable = e,
+            message = "Could not delete hardware-backed entry from YubiKey",
+            reason = DeleteEntryReason.YubiKeyDeleteFailed,
+            tag = TAG
+        )
     }
 
     private companion object {

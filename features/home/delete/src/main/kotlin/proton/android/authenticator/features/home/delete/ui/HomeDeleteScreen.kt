@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import proton.android.authenticator.business.entries.application.delete.DeleteEntryReason
 import proton.android.authenticator.features.home.delete.R
 import proton.android.authenticator.features.home.delete.presentation.HomeDeleteEvent
 import proton.android.authenticator.features.home.delete.presentation.HomeDeleteViewModel
@@ -43,7 +44,12 @@ fun HomeDeleteScreen(
             HomeDeleteEvent.Idle -> Unit
 
             is HomeDeleteEvent.OnDeleteEntryError -> {
-                onError(event.errorReason)
+                val messageRes = when (DeleteEntryReason.entries[event.errorReason]) {
+                    DeleteEntryReason.EntryNotFound -> R.string.home_delete_entry_not_found_error
+                    DeleteEntryReason.YubiKeyUnavailable -> R.string.home_delete_yubikey_unavailable_error
+                    DeleteEntryReason.YubiKeyDeleteFailed -> R.string.home_delete_yubikey_delete_failed_error
+                }
+                onError(messageRes)
             }
 
             HomeDeleteEvent.OnDeleteEntrySuccess -> {

@@ -45,7 +45,7 @@ Traditional authenticators store TOTP secrets locally in phone storage, decrypti
 - **Single-Session Batch Calculation (`INS_CALCULATE_ALL`):** All hardware-backed accounts are calculated in a single USB CCID session instead of opening redundant, slow, per-account sessions.
 - **Touch-Sense Detection:** Detects touch-required credentials automatically to calculate the current code without prematurely firing a second touch prompt for the next period code.
 - **Fail-Closed on Disconnect:** If the YubiKey is removed or locked, the interface immediately blanks the OTP codes (`------`) rather than leaving stale, valid tokens visible.
-- **Hardware Slot Reclamation:** Deleting a hardware-backed entry automatically deletes the credential from the physical YubiKey over USB CCID (5 s timeout), freeing one of the 32 hardware OATH slots.
+- **Hardware Slot Reclamation:** Deleting a hardware-backed entry deletes the credential from the physical YubiKey over USB CCID before removing the local entry. The key must be connected and the credential must be present; if deletion fails, the local entry is retained. Uninstalling the app or clearing its data does not erase credentials stored on the physical YubiKey.
 
 ### 2. Verified Migration & Cloud Deletion
 - **Pre-Wipe Code Verification:** When selecting `Move to YubiKey` on an existing local account, the app writes the secret to the YubiKey, calculates the current code on both Android and the hardware key, and verifies that the outputs match before permanently erasing the local seed. If verification fails, the local entry is left completely intact.

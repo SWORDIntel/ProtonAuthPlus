@@ -139,7 +139,7 @@ class EntryDeleterTest {
     }
 
     @Test
-    fun `when deleting YubiKey entry and key is disconnected, handles gracefully and tombstones local entry`() = runTest {
+    fun `when deleting YubiKey entry and key is disconnected, keeps entry and returns unavailable error`() = runTest {
         val yubiKeyBackend = EntryCredentialBackend.YubiKeyOath(
             credentialId = "dGVzdC1jcmVkZW50aWFsLWlk",
             deviceId = "dev-123",
@@ -163,17 +163,18 @@ class EntryDeleterTest {
         every { repository.find("test-yubikey-2") } returns flowOf(entry)
         every { yubiKeyOathCredentialDeleter.hasConnectedYubiKey() } returns false
 
-        val result = deleter.delete("test-yubikey-2")
+        val answer = commandHandler.handle(DeleteEntryCommand(id = "test-yubikey-2"))
+        assertTrue(answer is Answer.Failure)
+        assertEquals(DeleteEntryReason.YubiKeyUnavailable, (answer as Answer.Failure).reason)
 
-        assertEquals("test-yubikey-2", result.id)
         coVerify(exactly = 1) { yubiKeyOathCredentialDeleter.hasConnectedYubiKey() }
         coVerify(exactly = 0) { yubiKeyOathCredentialDeleter.delete(any<String>()) }
-        coVerify(exactly = 1) { repository.save(match { it.id == entry.id && it.isDeleted && it.credentialBackend == yubiKeyBackend }) }
+        coVerify(exactly = 0) { repository.save(any()) }
         coVerify(exactly = 0) { repository.remove(any()) }
     }
 
     @Test
-    fun `when deleting YubiKey entry and deletion throws exception, handles gracefully and tombstones local entry`() =
+    fun `when deleting YubiKey entry and physical deletion fails, keeps entry and returns failure`() =
         runTest {
         val yubiKeyBackend = EntryCredentialBackend.YubiKeyOath(
             credentialId = "dGVzdC1jcmVkZW50aWFsLWlk",
@@ -199,11 +200,11 @@ class EntryDeleterTest {
         every { yubiKeyOathCredentialDeleter.hasConnectedYubiKey() } returns true
         coEvery { yubiKeyOathCredentialDeleter.delete("dGVzdC1jcmVkZW50aWFsLWlk") } throws YubiKeyOathDeleteLockedError()
 
-        val result = deleter.delete("test-yubikey-3")
+        val error = runCatching { deleter.delete("test-yubikey-3") }.exceptionOrNull()
+        assertTrue(error is YubiKeyOathCredentialDeleteError)
 
-        assertEquals("test-yubikey-3", result.id)
         coVerify(exactly = 1) { yubiKeyOathCredentialDeleter.delete("dGVzdC1jcmVkZW50aWFsLWlk") }
-        coVerify(exactly = 1) { repository.save(match { it.id == entry.id && it.isDeleted && it.credentialBackend == yubiKeyBackend }) }
+        coVerify(exactly = 0) { repository.save(any()) }
         coVerify(exactly = 0) { repository.remove(any()) }
     }
 

@@ -29,6 +29,7 @@ import com.yubico.yubikit.oath.OathSession
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
+import proton.android.authenticator.business.entries.application.create.YubiKeyOathCredentialNotFoundError
 import proton.android.authenticator.business.entries.domain.EntryCredentialBackend
 import proton.android.authenticator.shared.common.logs.AuthenticatorLogger
 import java.util.concurrent.atomic.AtomicBoolean
@@ -74,12 +75,11 @@ internal class YubiKeyOathCredentialDeleterImpl @Inject constructor(
             val credential = oathSession.credentials
                 .firstOrNull { it.id.contentEquals(rawCredentialId) }
 
-            if (credential != null) {
-                oathSession.deleteCredential(credential)
-                AuthenticatorLogger.d(TAG, "Successfully deleted credential from YubiKey")
-            } else {
-                AuthenticatorLogger.w(TAG, "Credential $credentialId not found on connected YubiKey")
+            if (credential == null) {
+                throw YubiKeyOathCredentialNotFoundError()
             }
+            oathSession.deleteCredential(credential)
+            AuthenticatorLogger.d(TAG, "Successfully deleted credential from YubiKey")
         }
     }
 
@@ -139,3 +139,6 @@ internal class YubiKeyOathCredentialDeleterImpl @Inject constructor(
 internal class YubiKeyOathUnavailableError : Exception("YubiKey is not connected")
 
 internal class YubiKeyOathDeleteLockedError : Exception("YubiKey OATH session is locked")
+
+internal class YubiKeyOathCredentialDeleteError(cause: Throwable) :
+    Exception("Failed to delete credential from YubiKey", cause)

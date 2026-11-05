@@ -18,6 +18,7 @@
 
 package proton.android.authenticator.business.entries.application.delete
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import proton.android.authenticator.business.entries.domain.EntriesRepository
 import proton.android.authenticator.business.entries.domain.Entry
@@ -36,15 +37,17 @@ internal class EntryDeleter @Inject constructor(
         val entry = repository.find(id).first()
         val backend = entry.credentialBackend
         if (backend is EntryCredentialBackend.YubiKeyOath) {
-            if (yubiKeyOathCredentialDeleter.hasConnectedYubiKey()) {
-                try {
-                    yubiKeyOathCredentialDeleter.delete(backend.credentialId)
-                } catch (e: Exception) {
-                    AuthenticatorLogger.w(TAG, "Failed to delete physical credential for entry $id: ${e.message}")
-                    AuthenticatorLogger.w(TAG, e)
-                }
-            } else {
-                AuthenticatorLogger.d(TAG, "YubiKey not connected; skipping physical credential deletion for entry $id")
+            if (!yubiKeyOathCredentialDeleter.hasConnectedYubiKey()) {
+                throw YubiKeyOathUnavailableError()
+            }
+            try {
+                yubiKeyOathCredentialDeleter.delete(backend.credentialId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AuthenticatorLogger.w(TAG, "Failed to delete physical credential for entry $id: ${e.message}")
+                AuthenticatorLogger.w(TAG, e)
+                throw YubiKeyOathCredentialDeleteError(e)
             }
         }
         // Hardware entries are always tombstoned rather than removed: an earlier cloud copy of the

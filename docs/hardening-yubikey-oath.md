@@ -55,7 +55,7 @@ sequenceDiagram
 - **Batch Code Calculation (`INS_CALCULATE_ALL`):** In `YubiKeyOathCodeProvider.calculateBatch`, all hardware entries are queried in a single APDU session (`0xA4`), avoiding the latency and USB reconnect overhead of individual queries.
 - **Touch Detection (`TouchRequired`):** Credentials requiring physical touch are detected in the OATH applet response. The provider skips the "next period" speculative calculation for touch credentials, preventing confusing double-touch prompts.
 - **Fail-Closed Presentation:** When the key is disconnected or busy, codes fail closed and render placeholder dashes (`------`), preventing the display of expired or stale tokens.
-- **Hardware Slot Reclamation:** When a hardware entry is deleted in `EntryDeleter`, `YubiKeyOathCredentialDeleter.deleteIfConnected` sends an OATH delete command over USB CCID (5 s timeout) to reclaim the slot on the YubiKey.
+- **Hardware Slot Reclamation:** Deleting a hardware entry requires a connected YubiKey and a matching OATH credential. `EntryDeleter` deletes the physical credential before tombstoning the local entry; if the key is disconnected or the physical delete fails, deletion fails and the local entry remains. App uninstall/data clearing only affects phone-side state—it cannot erase OATH credentials stored on the key; those remain until explicitly removed from the key.
 
 ---
 

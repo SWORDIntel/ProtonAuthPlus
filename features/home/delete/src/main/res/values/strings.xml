@@ -18,5 +18,8 @@
 
 <resources>
     <string name="home_delete_error_dialog_title">Delete code?</string>
-    <string name="home_delete_error_dialog_message">The code will be permanently deleted. Please be sure that your data is backed up before you proceed.</string>
+    <string name="home_delete_error_dialog_message">The code will be permanently deleted. YubiKey-backed codes are erased from the physical key, so insert and unlock your YubiKey before deleting one. Uninstalling this app does not erase credentials stored on your YubiKey. Please be sure that your data is backed up before you proceed.</string>
+    <string name="home_delete_entry_not_found_error">This code could not be found. It may already have been deleted.</string>
+    <string name="home_delete_yubikey_unavailable_error">Connect your YubiKey to delete this hardware-backed code. The entry has not been deleted.</string>
+    <string name="home_delete_yubikey_delete_failed_error">Could not erase this credential from the YubiKey. The entry has not been deleted.</string>
 </resources>
